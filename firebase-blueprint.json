@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user profile information, preferences, and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "displayName": { "type": "string", "description": "User's display name" },
+        "photoURL": { "type": "string", "description": "URL to user's profile picture" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user first logged in" },
+        "lastLogin": { "type": "string", "format": "date-time", "description": "Timestamp of the last login" },
+        "wishlist": { "type": "array", "items": { "type": "integer" }, "description": "List of product IDs in the user's wishlist" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User's role for access control" },
+        "isBlacklisted": { "type": "boolean", "description": "Whether the user is banned from the platform" }
+      },
+      "required": ["uid", "email"]
+    },
+    "products": {
+      "title": "Product",
+      "description": "Stores travel products, experiences, and accommodations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique product ID" },
+        "title": { "type": "object", "description": "Multilingual title" },
+        "description": { "type": "object", "description": "Multilingual description" },
+        "price": { "type": "number", "description": "Current price in KRW" },
+        "originalPrice": { "type": "number", "description": "Original price before discount" },
+        "image": { "type": "string", "description": "URL to product image" },
+        "category": { "type": "string", "description": "Category ID" },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "List of tags" },
+        "inventory": { "type": "object", "description": "Inventory by date (e.g., {'2026-03-06': 10})" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "price", "category"]
+    },
+    "bookings": {
+      "title": "Booking",
+      "description": "Stores user reservations and orders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique booking ID" },
+        "userId": { "type": "string", "description": "UID of the user who booked" },
+        "productId": { "type": "string", "description": "ID of the booked product" },
+        "productTitle": { "type": "string", "description": "Title of the product at time of booking" },
+        "amount": { "type": "number", "description": "Total paid amount" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "rejected", "refunded"], "description": "Current status of the booking" },
+        "bookingDate": { "type": "string", "format": "date", "description": "Date of the experience/stay" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the booking was made" },
+        "settlementStatus": { "type": "string", "enum": ["pending", "completed"], "description": "Financial settlement status" }
+      },
+      "required": ["id", "userId", "productId", "amount", "status"]
+    },
+    "cms": {
+      "title": "CMS Content",
+      "description": "Stores banners, notices, FAQs, and events.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["banner", "notice", "faq", "event"], "description": "Type of content" },
+        "title": { "type": "object", "description": "Multilingual title" },
+        "content": { "type": "object", "description": "Multilingual content/body" },
+        "imageUrl": { "type": "string", "description": "Optional image URL" },
+        "link": { "type": "string", "description": "Optional link URL" },
+        "isActive": { "type": "boolean", "description": "Whether the content is visible" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "title"]
+    },
+    "settings": {
+      "title": "System Settings",
+      "description": "Stores site-wide configuration and SEO metadata.",
+      "type": "object",
+      "properties": {
+        "logo": { "type": "string", "description": "URL to site logo" },
+        "primaryColor": { "type": "string", "description": "Primary theme color (hex)" },
+        "seo": { "type": "object", "description": "SEO metadata (title, description, keywords)" },
+        "paymentApi": { "type": "object", "description": "Payment gateway configuration" }
+      }
+    },
+    "stats": {
+      "title": "Analytics Stats",
+      "description": "Stores daily aggregated statistics for the dashboard.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "sales": { "type": "number", "description": "Total sales for the day" },
+        "bookings": { "type": "integer", "description": "Number of bookings for the day" },
+        "newUsers": { "type": "integer", "description": "Number of new signups for the day" }
+      },
+      "required": ["date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile documents indexed by their Firebase Auth UID."
+    },
+    "/products/{productId}": {
+      "schema": "products",
+      "description": "Product inventory documents."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "bookings",
+      "description": "User reservation documents."
+    },
+    "/cms/{contentId}": {
+      "schema": "cms",
+      "description": "CMS content documents."
+    },
+    "/settings/config": {
+      "schema": "settings",
+      "description": "Site-wide configuration document."
+    },
+    "/stats/{date}": {
+      "schema": "stats",
+      "description": "Daily analytics statistics."
+    }
+  }
+}

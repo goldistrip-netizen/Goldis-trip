@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - role: string (user, admin)
+    //   - isBlacklisted: bool
+    // Collection: products
+    //   - id: string (required)
+    //   - title: map (multilingual)
+    //   - price: number
+    // Collection: bookings
+    //   - id: string (required)
+    //   - userId: string
+    //   - status: string (pending, confirmed, rejected, refunded)
+    // Collection: cms
+    //   - type: string (banner, notice, faq, event)
+    // Collection: settings
+    //   - logo: string
+    // Collection: stats
+    //   - date: string
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "goldistrip@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // Validation Functions
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'title', 'price', 'category']) &&
+             data.id is string &&
+             data.price is number;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['id', 'userId', 'productId', 'amount', 'status']) &&
+             data.id is string &&
+             data.userId is string &&
+             data.amount is number &&
+             data.status in ['pending', 'confirmed', 'rejected', 'refunded'];
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidProduct(request.resource.data);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data);
+      allow update: if isAdmin() && isValidBooking(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /cms/{contentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{config} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /stats/{date} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
