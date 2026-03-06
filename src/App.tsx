@@ -508,13 +508,15 @@ export default function App() {
         
         // Initial sync
         const userSnap = await getDoc(userRef);
+        const isAdminEmail = firebaseUser.email === 'goldistrip@gmail.com';
+
         if (!userSnap.exists()) {
           const newUser: UserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
             photoURL: firebaseUser.photoURL,
-            role: 'user',
+            role: isAdminEmail ? 'admin' : 'user',
             wishlist: []
           };
           await setDoc(userRef, {
@@ -525,7 +527,15 @@ export default function App() {
           setUser(newUser);
           setWishlist([]);
         } else {
-          await updateDoc(userRef, { lastLogin: serverTimestamp() });
+          const existingData = userSnap.data() as UserProfile;
+          if (isAdminEmail && existingData.role !== 'admin') {
+            await updateDoc(userRef, { 
+              role: 'admin',
+              lastLogin: serverTimestamp() 
+            });
+          } else {
+            await updateDoc(userRef, { lastLogin: serverTimestamp() });
+          }
         }
 
         // Real-time profile sync
@@ -834,7 +844,7 @@ export default function App() {
                         <Heart size={16} />
                         <span>{t('wishlist')}</span>
                       </button>
-                      {user.role === 'admin' && (
+                      {(user.role === 'admin' || user.email === 'goldistrip@gmail.com') && (
                         <button
                           onClick={() => {
                             setIsAdminDashboardOpen(true);
