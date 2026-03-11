@@ -4,7 +4,7 @@ import {
   Plus, Edit, Trash2, Check, X, AlertCircle, TrendingUp, 
   Calendar, DollarSign, UserPlus, Search, Filter, ArrowUpRight, 
   ArrowDownRight, MoreVertical, Image as ImageIcon, Save, Globe,
-  ChevronRight, LogOut, Menu, X as CloseIcon
+  ChevronRight, LogOut, Menu, X as CloseIcon, Briefcase
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -14,7 +14,7 @@ import {
   collection, query, getDocs, doc, setDoc, updateDoc, deleteDoc, 
   onSnapshot, orderBy, limit, where, Timestamp 
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -76,17 +76,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
         const bookingsQuery = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'), limit(50));
         const unsubscribeBookings = onSnapshot(bookingsQuery, (snapshot) => {
           setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'bookings');
         });
 
         const usersQuery = query(collection(db, 'users'), limit(50));
         const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
           setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'users');
         });
 
         // Products might be many, so we fetch them
         const productsQuery = query(collection(db, 'products'), limit(50));
         const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
           setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'products');
         });
 
         setLoading(false);

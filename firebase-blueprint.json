@@ -47,8 +47,7 @@
         "amount": { "type": "number", "description": "Total paid amount" },
         "status": { "type": "string", "enum": ["pending", "confirmed", "rejected", "refunded"], "description": "Current status of the booking" },
         "bookingDate": { "type": "string", "format": "date", "description": "Date of the experience/stay" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "When the booking was made" },
-        "settlementStatus": { "type": "string", "enum": ["pending", "completed"], "description": "Financial settlement status" }
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the booking was made" }
       },
       "required": ["id", "userId", "productId", "amount", "status"]
     },

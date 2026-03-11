@@ -9,14 +9,16 @@ import {
   Heart, Menu, ChevronLeft, ArrowRight, Ticket, 
   Train, Bus, Utensils, Bed, ChevronDown, Share2,
   Instagram, Facebook, MessageCircle, Globe, X, LogOut,
-  CreditCard, Settings, ChevronRight
+  CreditCard, Settings, ChevronRight, Briefcase, UserPlus,
+  CheckCircle2, Info, Map as MapIcon, Copy, Plus, DollarSign, Filter
 } from 'lucide-react';
-import { auth, db, googleProvider, facebookProvider, appleProvider } from './firebase';
+import { auth, db, googleProvider, facebookProvider, appleProvider, handleFirestoreError, OperationType } from './firebase';
 import { 
   signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { AdminDashboard } from './components/AdminDashboard';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface UserProfile {
   uid: string;
@@ -96,7 +98,23 @@ const TRANSLATIONS: any = {
     adminDashboard: "관리자 대시보드",
     checkout: "결제하기",
     continueShopping: "계속 쇼핑하기",
-    itemCount: "개"
+    itemCount: "개",
+    partnership: "파트너십",
+    partnerInquiry: "입점문의",
+    bookedCountLabel: "개 예약됨",
+    whyRecommend: "크리에이트립이 추천하는 이유",
+    thingsToKeepInMind: "유의사항",
+    priceInfo: "가격 정보",
+    howToReserve: "예약 방법",
+    location: "위치",
+    selectOption: "옵션 선택",
+    step1: "1단계: 날짜 및 옵션을 선택하세요.",
+    step2: "2단계: 예약자 정보를 입력하세요.",
+    step3: "3단계: 결제를 완료하세요.",
+    step4: "4단계: 예약 확정 알림을 확인하세요.",
+    address: "주소",
+    copyAddress: "주소 복사",
+    addressCopied: "주소가 복사되었습니다."
   },
   EN: {
     searchPlaceholder: "Search destinations, stays, activities",
@@ -156,7 +174,23 @@ const TRANSLATIONS: any = {
     adminDashboard: "Admin Dashboard",
     checkout: "Checkout",
     continueShopping: "Continue Shopping",
-    itemCount: "items"
+    itemCount: "items",
+    partnership: "Partnership",
+    partnerInquiry: "Partner Inquiry",
+    bookedCountLabel: "booked",
+    whyRecommend: "Why we recommend it",
+    thingsToKeepInMind: "Things to keep in mind",
+    priceInfo: "Price Information",
+    howToReserve: "How to reserve",
+    location: "Location",
+    selectOption: "Select Option",
+    step1: "Step 1: Select date and options.",
+    step2: "Step 2: Enter reservation info.",
+    step3: "Step 3: Complete payment.",
+    step4: "Step 4: Check confirmation notification.",
+    address: "Address",
+    copyAddress: "Copy Address",
+    addressCopied: "Address copied to clipboard."
   },
   JA: {
     searchPlaceholder: "目的地、宿泊、アクティ비티を検索",
@@ -214,7 +248,9 @@ const TRANSLATIONS: any = {
     addedToCart: "カートに追加されました。",
     checkout: "決済する",
     continueShopping: "ショッピングを続ける",
-    itemCount: "個"
+    itemCount: "個",
+    partnership: "パートナーシップ",
+    partnerInquiry: "入店問い合わせ"
   },
   ZH: {
     searchPlaceholder: "搜索目的地、住宿、活动",
@@ -274,18 +310,21 @@ const TRANSLATIONS: any = {
     adminDashboard: "管理员仪表板",
     checkout: "去结算",
     continueShopping: "继续购物",
-    itemCount: "件"
+    itemCount: "件",
+    partnership: "合作伙伴",
+    partnerInquiry: "入驻咨询"
   }
 };
 
 // --- 가상 데이터 (Goldis trip - 국내 로컬 상품) ---
 const CATEGORIES = [
   { id: 'all', name: { KO: '전체', EN: 'All', JA: 'すべて', ZH: '全部' }, icon: <MapPin size={20} /> },
-  { id: 'theme-park', name: { KO: '테마파크/전시', EN: 'Theme Park/Exhibition', JA: 'テーマパーク/展示', ZH: '主题公园/展览' }, icon: <Ticket size={20} /> },
-  { id: 'transport', name: { KO: '교통/이동', EN: 'Transport', JA: '交通/移動', ZH: '交通/移动' }, icon: <Train size={20} /> },
-  { id: 'tour', name: { KO: '투어/체험', EN: 'Tour/Experience', JA: 'ツアー/体験', ZH: '旅游/体验' }, icon: <Bus size={20} /> },
-  { id: 'food', name: { KO: '로컬 맛집', EN: 'Local Food', JA: 'ローカルグルメ', ZH: '本地美食' }, icon: <Utensils size={20} /> },
-  { id: 'accommodation', name: { KO: '감성 숙소', EN: 'Unique Stays', JA: '感性的な宿泊', ZH: '特色住宿' }, icon: <Bed size={20} /> },
+  { id: 'tour', name: { KO: '투어', EN: 'Tour', JA: 'ツアー', ZH: '旅游' }, icon: <Bus size={20} /> },
+  { id: 'ticket-admission', name: { KO: '티켓&입장권', EN: 'Ticket & Admission', JA: 'チケット＆入場券', ZH: '门票' }, icon: <Ticket size={20} /> },
+  { id: 'experience', name: { KO: '체험', EN: 'Experience', JA: '体験', ZH: '体验' }, icon: <Star size={20} /> },
+  { id: 'admission', name: { KO: '입장권', EN: 'Admission', JA: '入場券', ZH: '入场券' }, icon: <Ticket size={20} /> },
+  { id: 'transportation', name: { KO: '교통수단', EN: 'Transportation', JA: '交通手段', ZH: '交通工具' }, icon: <Train size={20} /> },
+  { id: 'wifi-sim', name: { KO: 'Wife/Sim', EN: 'Wifi/Sim', JA: 'Wifi/Sim', ZH: 'Wifi/Sim' }, icon: <Globe size={20} /> },
 ];
 
 const MOCK_PRODUCTS = [
@@ -305,10 +344,26 @@ const MOCK_PRODUCTS = [
     },
     rating: 4.8,
     reviews: 12450,
+    bookedCount: 45200,
     price: 17000,
     originalPrice: 17000,
     image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=600&auto=format&fit=crop",
-    category: "theme-park",
+    gallery: [
+      "https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1515091943-9d5c0ad28b81?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=600&auto=format&fit=crop"
+    ],
+    recommendations: {
+      KO: ["국내 최대 규모의 몰입형 미디어아트 전시관입니다.", "빛과 소리가 만들어내는 영원한 자연의 공간을 경험하세요.", "다양한 테마의 전시실에서 인생샷을 남길 수 있습니다."],
+      EN: ["Korea's largest immersive media art exhibition hall.", "Experience the space of eternal nature created by light and sound.", "You can leave a life shot in exhibition rooms with various themes."],
+      JA: ["国内最大規模の没入型メディアアート展示館です。", "光と音が作り出す永遠の自然の空間を体験してください。", "様々なテーマの展示室で人生ショットを残すことができます。"]
+    },
+    notes: {
+      KO: ["전시관 내 음식물 반입은 금지되어 있습니다.", "반려동물 동반 입장은 불가능합니다.", "재입장은 불가능하니 유의해 주세요."],
+      EN: ["Bringing food into the exhibition hall is prohibited.", "Pets are not allowed to enter.", "Please note that re-entry is not possible."],
+      JA: ["展示館内への飲食物の持ち込みは禁止されています。", "ペット同伴の入場はできません。", "再入場はできませんのでご注意ください。"]
+    },
+    category: "admission",
     badge: {
       KO: "제주 필수코스",
       EN: "Must-visit in Jeju",
@@ -338,9 +393,25 @@ const MOCK_PRODUCTS = [
     },
     rating: 4.9,
     reviews: 8300,
+    bookedCount: 12500,
     price: 25000,
     originalPrice: 35000,
     image: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=600&auto=format&fit=crop",
+    gallery: [
+      "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1544256718-3baf242d5471?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=600&auto=format&fit=crop"
+    ],
+    recommendations: {
+      KO: ["광안대교를 배경으로 즐기는 로맨틱한 선셋 & 야경 투어입니다.", "다과와 음료가 기본으로 제공됩니다.", "럭셔리한 요트에서 부산의 바다를 만끽하세요."],
+      EN: ["A romantic sunset & night view tour with Gwangan Bridge in the background.", "Snacks and drinks are provided as standard.", "Enjoy Busan's sea on a luxury yacht."],
+      JA: ["広安大橋を背景に楽しむロマンチックなサンセット＆夜景ツアーです。", "お菓子と飲み物が基本で提供されます。", "贅沢なヨットで釜山の海を満喫してください。"]
+    },
+    notes: {
+      KO: ["출발 15분 전까지 선착장에 도착해 주세요.", "기상 악화 시 안전을 위해 일정이 변경될 수 있습니다.", "멀미가 심하신 분은 미리 멀미약을 복용해 주세요."],
+      EN: ["Please arrive at the pier 15 minutes before departure.", "The schedule may change for safety in case of severe weather.", "If you have severe motion sickness, please take motion sickness medicine in advance."],
+      JA: ["出発15分前までに船着場に到着してください。", "悪天候の場合、安全のために日程が変更されることがあります。", "乗り物酔いがひどい方は、あらかじめ酔い止めを服用してください。"]
+    },
     category: "tour",
     badge: {
       KO: "특가",
@@ -371,6 +442,7 @@ const MOCK_PRODUCTS = [
     },
     rating: 4.7,
     reviews: 5120,
+    bookedCount: 8900,
     price: 15000,
     image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=600&auto=format&fit=crop",
     category: "tour",
@@ -397,9 +469,10 @@ const MOCK_PRODUCTS = [
     },
     rating: 4.5,
     reviews: 3200,
+    bookedCount: 6400,
     price: 27600,
     image: "https://images.unsplash.com/photo-1544256718-3baf242d5471?q=80&w=600&auto=format&fit=crop",
-    category: "transport",
+    category: "transportation",
     badge: {
       KO: "즉시 확정",
       EN: "Instant Confirmation",
@@ -429,10 +502,11 @@ const MOCK_PRODUCTS = [
     },
     rating: 4.9,
     reviews: 1450,
+    bookedCount: 3200,
     price: 180000,
     originalPrice: 220000,
     image: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=600&auto=format&fit=crop",
-    category: "accommodation",
+    category: "experience",
     badge: {
       KO: "인기 숙소",
       EN: "Popular Stay",
@@ -464,7 +538,7 @@ const MOCK_PRODUCTS = [
     reviews: 6700,
     price: 66000,
     image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?q=80&w=600&auto=format&fit=crop",
-    category: "food",
+    category: "experience",
     description: {
       KO: "육즙이 팡팡 터지는 두툼한 제주 흑돼지 근고기. 웨이팅 없이 예약한 시간에 바로 입장하여 즐길 수 있는 식사권입니다.",
       EN: "Thick Jeju black pork with bursting juices. This is a meal voucher that allows you to enter and enjoy at your reserved time without waiting.",
@@ -499,57 +573,79 @@ export default function App() {
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
 
+  // Hero Slider State
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const heroImages = [
+    "https://i.postimg.cc/qqtJ8Tg2/zero-take-0FRGi-Jd-ZY8-unsplash.jpg",
+    "https://i.postimg.cc/CLqM5S3L/bundo-kim-p-D5pb-QG5TE-unsplash.jpg"
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroImages.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        
-        // Initial sync
-        const userSnap = await getDoc(userRef);
-        const isAdminEmail = firebaseUser.email === 'goldistrip@gmail.com';
+      try {
+        if (firebaseUser) {
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          
+          // Initial sync
+          const userSnap = await getDoc(userRef).catch(err => handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`));
+          if (!userSnap) return;
 
-        if (!userSnap.exists()) {
-          const newUser: UserProfile = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            role: isAdminEmail ? 'admin' : 'user',
-            wishlist: []
-          };
-          await setDoc(userRef, {
-            ...newUser,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-          });
-          setUser(newUser);
-          setWishlist([]);
-        } else {
-          const existingData = userSnap.data() as UserProfile;
-          if (isAdminEmail && existingData.role !== 'admin') {
-            await updateDoc(userRef, { 
-              role: 'admin',
-              lastLogin: serverTimestamp() 
-            });
+          const isAdminEmail = firebaseUser.email === 'goldistrip@gmail.com';
+
+          if (!userSnap.exists()) {
+            const newUser: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              role: isAdminEmail ? 'admin' : 'user',
+              wishlist: []
+            };
+            await setDoc(userRef, {
+              ...newUser,
+              createdAt: serverTimestamp(),
+              lastLogin: serverTimestamp(),
+            }).catch(err => handleFirestoreError(err, OperationType.CREATE, `users/${firebaseUser.uid}`));
+            setUser(newUser);
+            setWishlist([]);
           } else {
-            await updateDoc(userRef, { lastLogin: serverTimestamp() });
+            const existingData = userSnap.data() as UserProfile;
+            if (isAdminEmail && existingData.role !== 'admin') {
+              await updateDoc(userRef, { 
+                role: 'admin',
+                lastLogin: serverTimestamp() 
+              }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`));
+            } else {
+              await updateDoc(userRef, { lastLogin: serverTimestamp() }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`));
+            }
           }
-        }
 
-        // Real-time profile sync
-        unsubscribeProfile = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            const data = doc.data() as UserProfile;
-            setUser(data);
-            setWishlist(data.wishlist || []);
-          }
-        });
-      } else {
-        setUser(null);
-        setWishlist([]);
-        if (unsubscribeProfile) unsubscribeProfile();
+          // Real-time profile sync
+          unsubscribeProfile = onSnapshot(userRef, (doc) => {
+            if (doc.exists()) {
+              const data = doc.data() as UserProfile;
+              setUser(data);
+              setWishlist(data.wishlist || []);
+            }
+          }, (error) => {
+            handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          });
+        } else {
+          setUser(null);
+          setWishlist([]);
+          if (unsubscribeProfile) unsubscribeProfile();
+        }
+      } catch (error) {
+        console.error("Auth state change error:", error);
       }
     });
 
@@ -671,16 +767,48 @@ export default function App() {
   };
 
   // 예약 버튼 클릭 처리
-  const handleBook = () => {
-    if (selectedProduct) {
-      setToastMessage(`${selectedProduct.title[selectedLang]} ${t('booked')}`);
+  const handleBook = async (product?: any) => {
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    const bookingProduct = product || selectedProduct;
+    if (!bookingProduct) return;
+
+    const bookingId = `BK${Date.now()}`;
+    try {
+      const bookingData = {
+        id: bookingId,
+        userId: user.uid,
+        userEmail: user.email,
+        productId: bookingProduct.id.toString(),
+        productTitle: bookingProduct.title[selectedLang],
+        amount: bookingProduct.price,
+        status: 'pending',
+        bookingDate: new Date().toISOString().split('T')[0],
+        createdAt: new Date().toISOString(),
+      };
+
+      await setDoc(doc(db, 'bookings', bookingId), bookingData);
+      
+      setToastMessage(`${bookingProduct.title[selectedLang]} ${t('booked')}`);
       setTimeout(() => setToastMessage(''), 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `bookings/${bookingId}`);
     }
   };
 
   // 공유 버튼 클릭 처리
   const handleShare = () => {
-    if (selectedProduct) {
+    if (navigator.share && selectedProduct) {
+      navigator.share({
+        title: 'Goldis trip',
+        text: selectedProduct.title[selectedLang],
+        url: window.location.href,
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(window.location.href);
       setToastMessage(t('copied'));
       setTimeout(() => setToastMessage(''), 3000);
     }
@@ -716,7 +844,7 @@ export default function App() {
 
       {/* 네비게이션 바 */}
       <nav className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center cursor-pointer" onClick={goHome}>
               {/* 로고 이미지 */}
@@ -786,7 +914,6 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                <span className="hidden lg:block text-sm font-medium">{t('wishlist')}</span>
               </button>
               <button 
                 onClick={() => setIsCartOpen(true)}
@@ -844,7 +971,7 @@ export default function App() {
                         <Heart size={16} />
                         <span>{t('wishlist')}</span>
                       </button>
-                      {(user.role === 'admin' || user.email === 'goldistrip@gmail.com') && (
+                      {user.role === 'admin' && (
                         <button
                           onClick={() => {
                             setIsAdminDashboardOpen(true);
@@ -884,21 +1011,52 @@ export default function App() {
       {/* 메인 컨텐츠 영역 */}
       {currentView === 'home' ? (
         <main>
-          {/* 히어로 배너 섹션 (한국 풍경 이미지) */}
-          <section className="relative h-[400px] md:h-[500px] bg-gray-900 flex items-center justify-center">
-            <img 
-              src="https://images.unsplash.com/photo-1515091943-9d5c0ad28b81?q=80&w=2000&auto=format&fit=crop" 
-              alt="Korea Travel Background" 
-              className="absolute inset-0 w-full h-full object-cover opacity-70"
-              referrerPolicy="no-referrer"
-            />
+          {/* 히어로 배너 섹션 (슬라이드 이미지) */}
+          <section className="relative h-[400px] md:h-[500px] bg-gray-900 flex items-center justify-center overflow-hidden">
+            <AnimatePresence initial={false}>
+              <motion.img 
+                key={currentSlide}
+                src={heroImages[currentSlide]} 
+                alt="Korea Travel Background" 
+                initial={{ x: '100%', opacity: 0 }}
+                animate={{ x: 0, opacity: 0.7 }}
+                exit={{ x: '-100%', opacity: 0 }}
+                transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute inset-0 w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </AnimatePresence>
+            
+            {/* 슬라이드 인디케이터 */}
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2 z-20">
+              {heroImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentSlide(idx)}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    currentSlide === idx ? 'w-8 bg-[#FFB602]' : 'bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+
             <div className="relative z-10 text-center px-4 w-full max-w-3xl">
-              <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg leading-tight">
+              <motion.h1 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.8 }}
+                className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg leading-tight"
+              >
                 {t('heroTitle')}
-              </h1>
+              </motion.h1>
               
               {/* 모바일 & 히어로 검색창 */}
-              <div className="bg-white p-2 rounded-2xl shadow-2xl flex items-center">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8, duration: 0.8 }}
+                className="bg-white p-2 rounded-2xl shadow-2xl flex items-center"
+              >
                 <div className="flex-1 flex items-center px-4">
                   <Search className="text-gray-400 mr-2" size={24} />
                   <input 
@@ -912,27 +1070,33 @@ export default function App() {
                 <button className="bg-[#FFB602] text-white px-6 py-3 rounded-xl font-bold text-lg hover:bg-yellow-600 transition-colors hidden md:block">
                   {t('searchBtn')}
                 </button>
-              </div>
+              </motion.div>
             </div>
           </section>
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
             {/* 카테고리 필터 */}
-            <section className="mb-12">
-              <h2 className="text-2xl font-bold mb-6">{t('categoryTitle')}</h2>
-              <div className="flex overflow-x-auto pb-4 hide-scrollbar space-x-4">
+            <section className="mb-10">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('categoryTitle')}</h2>
+              </div>
+              <div className="flex overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 space-x-3 sm:space-x-4">
                 {CATEGORIES.map(category => (
                   <button
                     key={category.id}
                     onClick={() => setActiveCategory(category.id)}
-                    className={`flex flex-col items-center justify-center min-w-[85px] h-24 rounded-2xl border transition-all ${
+                    className={`flex flex-col items-center justify-center min-w-[80px] sm:min-w-[100px] py-4 rounded-2xl transition-all ${
                       activeCategory === category.id 
-                        ? 'border-[#FFB602] bg-yellow-50 text-[#FFB602] shadow-sm' 
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:shadow-sm'
+                        ? 'bg-yellow-50 text-[#FFB602] ring-2 ring-[#FFB602] ring-inset' 
+                        : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
                     }`}
                   >
-                    <div className="mb-2">{category.icon}</div>
-                    <span className="text-sm font-medium">{category.name[selectedLang]}</span>
+                    <div className={`mb-2 transition-transform duration-300 ${activeCategory === category.id ? 'scale-110' : 'group-hover:scale-110'}`}>
+                      {category.icon}
+                    </div>
+                    <span className={`text-xs sm:text-sm font-bold ${activeCategory === category.id ? 'text-[#FFB602]' : 'text-gray-600'}`}>
+                      {category.name[selectedLang]}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -954,23 +1118,23 @@ export default function App() {
                   <p className="text-gray-500 text-lg">{t('noResult')}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
                   {filteredProducts.map(product => (
                     <div 
                       key={product.id} 
-                      className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow cursor-pointer border border-gray-100 group"
+                      className="flex flex-col cursor-pointer group"
                       onClick={() => goDetail(product)}
                     >
                       {/* 썸네일 */}
-                      <div className="relative h-48 overflow-hidden">
+                      <div className="relative aspect-[4/3] rounded-xl overflow-hidden mb-3">
                         <img 
                           src={product.image} 
                           alt={product.title[selectedLang]} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           referrerPolicy="no-referrer"
                         />
                         {product.badge && (
-                          <div className="absolute top-3 left-3 bg-[#FFB602] text-white text-xs font-bold px-2 py-1 rounded">
+                          <div className="absolute top-2 left-2 bg-[#FFB602] text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
                             {product.badge[selectedLang]}
                           </div>
                         )}
@@ -979,36 +1143,54 @@ export default function App() {
                             e.stopPropagation();
                             toggleWishlist(product.id);
                           }}
-                          className="absolute top-3 right-3 p-2 bg-white/70 backdrop-blur-sm rounded-full text-gray-600 hover:text-red-500 hover:bg-white transition-colors"
+                          className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full text-gray-600 hover:text-red-500 hover:bg-white transition-colors shadow-sm"
                         >
-                          <Heart size={18} fill={wishlist.includes(product.id) ? "currentColor" : "none"} className={wishlist.includes(product.id) ? "text-red-500" : ""} />
+                          <Heart size={16} fill={wishlist.includes(product.id) ? "currentColor" : "none"} className={wishlist.includes(product.id) ? "text-red-500" : ""} />
                         </button>
                       </div>
                       
                       {/* 정보 */}
-                      <div className="p-4">
-                        <div className="flex items-center text-xs text-gray-500 mb-2 space-x-2">
-                          <span className="flex items-center"><MapPin size={12} className="mr-1"/>{product.location[selectedLang]}</span>
-                          <span className="flex items-center text-[#FFB602]">
-                            <Star size={12} fill="currentColor" className="mr-1"/>
-                            {product.rating} ({product.reviews.toLocaleString()})
-                          </span>
+                      <div className="flex-1 flex flex-col">
+                        <div className="flex items-center text-[11px] text-gray-400 mb-1 font-medium">
+                          <span>{product.location[selectedLang]}</span>
+                          <span className="mx-1.5 text-gray-300">•</span>
+                          <span>{CATEGORIES.find(c => c.id === product.category)?.name[selectedLang]}</span>
                         </div>
-                        <h3 className="font-bold text-gray-800 leading-tight mb-3 h-10 line-clamp-2 group-hover:text-[#FFB602] transition-colors">
+                        
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 leading-snug mb-1.5 line-clamp-2 group-hover:text-[#FFB602] transition-colors">
                           {product.title[selectedLang]}
                         </h3>
                         
-                        <div className="flex items-end justify-between mt-4">
-                          <div>
-                            {product.originalPrice && (
-                              <p className="text-xs text-gray-400 line-through mb-0.5">
-                                {t('won')} {product.originalPrice.toLocaleString()}
-                              </p>
+                        <div className="mt-auto">
+                          <div className="flex items-center text-xs mb-2">
+                            <div className="flex items-center text-[#FFB602] font-bold">
+                              <Star size={12} fill="currentColor" className="mr-0.5"/>
+                              {product.rating}
+                            </div>
+                            <span className="text-gray-400 ml-1">({product.reviews.toLocaleString()})</span>
+                            {product.bookedCount && (
+                              <>
+                                <span className="mx-1.5 text-gray-200">|</span>
+                                <span className="text-gray-500">{product.bookedCount.toLocaleString()} {t('bookedCountLabel')}</span>
+                              </>
                             )}
-                            <p className="text-lg font-extrabold text-gray-900">
-                              <span className="text-sm font-normal mr-1">{t('won')}</span>
+                          </div>
+                          
+                          <div className="flex items-baseline space-x-1.5">
+                            {product.originalPrice && (
+                              <span className="text-xs text-gray-400 line-through">
+                                {t('won')} {product.originalPrice.toLocaleString()}
+                              </span>
+                            )}
+                            <span className="text-base sm:text-lg font-extrabold text-gray-900">
+                              <span className="text-xs font-normal mr-0.5">{t('won')}</span>
                               {product.price.toLocaleString()}
-                            </p>
+                            </span>
+                            {product.originalPrice && (
+                              <span className="text-sm font-bold text-red-500">
+                                {Math.round((1 - product.price / product.originalPrice) * 100)}%
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1020,7 +1202,7 @@ export default function App() {
           </div>
         </main>
       ) : currentView === 'mypage' ? (
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="flex items-center mb-8">
             <button 
               onClick={goHome}
@@ -1174,120 +1356,270 @@ export default function App() {
           </div>
         </main>
       ) : (
-        // --- 상세 페이지 영역 ---
-        <main className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 py-0 sm:py-8">
-          <button 
-            onClick={goHome}
-            className="hidden sm:flex items-center text-gray-600 hover:text-[#FFB602] mb-6 transition-colors"
-          >
-            <ChevronLeft size={20} className="mr-1" /> {t('backToList')}
-          </button>
+        // --- 상세 페이지 영역 (Creatrip Style) ---
+        <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+          {/* 브레드크럼 / 뒤로가기 */}
+          <div className="flex items-center space-x-2 text-sm text-gray-500 mb-6">
+            <button onClick={goHome} className="hover:text-[#FFB602] transition-colors">{t('home')}</button>
+            <ChevronRight size={14} />
+            <span className="text-gray-400 truncate">{selectedProduct.title[selectedLang]}</span>
+          </div>
 
-          <div className="bg-white sm:rounded-3xl sm:shadow-lg overflow-hidden flex flex-col md:flex-row">
-            {/* 모바일용 뒤로가기 버튼 (이미지 위) */}
-            <div className="relative md:w-1/2 h-64 sm:h-auto min-h-[400px]">
-              <button 
-                onClick={goHome}
-                className="sm:hidden absolute top-4 left-4 z-10 p-2 bg-white/80 backdrop-blur-md rounded-full text-gray-800 shadow-sm"
-              >
-                <ChevronLeft size={24} />
-              </button>
-              <img 
-                src={selectedProduct.image} 
-                alt={selectedProduct.title[selectedLang]} 
-                className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* 왼쪽: 메인 콘텐츠 (70%) */}
+            <div className="lg:w-[68%] space-y-10">
+              {/* 이미지 갤러리 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-3xl overflow-hidden shadow-sm">
+                <div className="md:col-span-2 aspect-[16/9] relative overflow-hidden group">
+                  <img 
+                    src={selectedProduct.image} 
+                    alt={selectedProduct.title[selectedLang]} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                {selectedProduct.gallery && selectedProduct.gallery.slice(1, 3).map((img: string, idx: number) => (
+                  <div key={idx} className="aspect-[4/3] relative overflow-hidden group hidden md:block">
+                    <img 
+                      src={img} 
+                      alt={`Gallery ${idx}`} 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                ))}
+              </div>
 
-            {/* 상품 상세 정보 */}
-            <div className="md:w-1/2 p-6 md:p-10 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded text-xs font-semibold flex items-center">
-                    <MapPin size={12} className="mr-1"/> {selectedProduct.location[selectedLang]}
-                  </span>
-                  {selectedProduct.badge && (
-                    <span className="bg-yellow-100 text-[#FFB602] px-2.5 py-1 rounded text-xs font-semibold">
-                      {selectedProduct.badge[selectedLang]}
-                    </span>
-                  )}
+              {/* 상품 헤더 정보 */}
+              <div className="border-b border-gray-100 pb-8">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-[#FFB602] text-sm font-bold flex items-center">
+                        <MapPin size={14} className="mr-1" /> {selectedProduct.location[selectedLang]}
+                      </span>
+                      {selectedProduct.badge && (
+                        <span className="bg-yellow-50 text-[#FFB602] px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                          {selectedProduct.badge[selectedLang]}
+                        </span>
+                      )}
+                    </div>
+                    <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 leading-tight">
+                      {selectedProduct.title[selectedLang]}
+                    </h1>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button onClick={handleShare} className="p-2.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all">
+                      <Share2 size={20} />
+                    </button>
+                    <button onClick={() => toggleWishlist(selectedProduct.id)} className="p-2.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all">
+                      <Heart size={20} fill={wishlist.includes(selectedProduct.id) ? "currentColor" : "none"} className={wishlist.includes(selectedProduct.id) ? "text-red-500" : ""} />
+                    </button>
+                  </div>
                 </div>
-                
-                <div className="flex justify-between items-start">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                    {selectedProduct.title[selectedLang]}
-                  </h1>
-                  <button 
-                    onClick={handleShare}
-                    className="p-2 text-gray-400 hover:text-[#FFB602] transition-colors"
-                  >
-                    <Share2 size={24} />
-                  </button>
-                </div>
-                
-                <div className="flex items-center mb-6 pb-6 border-b border-gray-100">
-                  <div className="flex items-center text-[#FFB602] font-bold text-lg">
-                    <Star size={20} fill="currentColor" className="mr-1"/>
+
+                <div className="flex items-center text-sm">
+                  <div className="flex items-center text-[#FFB602] font-bold">
+                    <Star size={16} fill="currentColor" className="mr-1" />
                     {selectedProduct.rating}
                   </div>
-                  <span className="mx-3 text-gray-300">|</span>
-                  <span className="text-gray-500 underline cursor-pointer">
+                  <span className="mx-2 text-gray-200">|</span>
+                  <span className="text-gray-500 underline underline-offset-4 cursor-pointer">
                     {selectedProduct.reviews.toLocaleString()} {t('reviews')}
                   </span>
-                </div>
-
-                <p className="text-gray-600 leading-relaxed mb-8">
-                  {selectedProduct.description[selectedLang]}
-                </p>
-
-                {/* 옵션 선택 (UI만 구현) */}
-                <div className="space-y-4 mb-8">
-                  <h3 className="font-bold text-lg">{t('selectDate')}</h3>
-                  <button className="w-full flex justify-between items-center border border-gray-300 rounded-xl p-4 hover:border-[#FFB602] transition-colors bg-white text-left">
-                    <span className="flex items-center text-gray-700">
-                      <Calendar size={20} className="mr-3 text-gray-400" />
-                      {t('selectDatePlaceholder')}
-                    </span>
-                    <ChevronDown size={20} className="text-gray-400" />
-                  </button>
+                  <span className="mx-2 text-gray-200">|</span>
+                  <span className="text-gray-500">
+                    {selectedProduct.bookedCount.toLocaleString()} {t('bookedCountLabel')}
+                  </span>
                 </div>
               </div>
 
-              {/* 결제 요약 및 버튼 */}
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <div className="flex justify-between items-end mb-6">
-                  <span className="text-gray-600 font-medium">{t('totalPrice')}</span>
-                  <div className="text-right">
-                    {selectedProduct.originalPrice && (
-                      <p className="text-sm text-gray-400 line-through mb-1">
-                        {t('won')} {selectedProduct.originalPrice.toLocaleString()}
-                      </p>
-                    )}
-                    <p className="text-3xl font-extrabold text-[#FFB602]">
-                      {t('won')} {selectedProduct.price.toLocaleString()}
-                    </p>
+              {/* 추천 이유 */}
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <CheckCircle2 size={24} className="mr-2 text-[#FFB602]" />
+                  {t('whyRecommend')}
+                </h2>
+                <div className="bg-yellow-50/50 rounded-3xl p-6 sm:p-8">
+                  <ul className="space-y-4">
+                    {(selectedProduct.recommendations?.[selectedLang] || []).map((rec: string, idx: number) => (
+                      <li key={idx} className="flex items-start">
+                        <div className="mt-1.5 mr-3 w-1.5 h-1.5 rounded-full bg-[#FFB602] flex-shrink-0" />
+                        <p className="text-gray-700 leading-relaxed font-medium">{rec}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+
+              {/* 유의사항 */}
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <Info size={24} className="mr-2 text-[#FFB602]" />
+                  {t('thingsToKeepInMind')}
+                </h2>
+                <div className="bg-gray-50 rounded-3xl p-6 sm:p-8 border border-gray-100">
+                  <ul className="space-y-4">
+                    {(selectedProduct.notes?.[selectedLang] || []).map((note: string, idx: number) => (
+                      <li key={idx} className="flex items-start">
+                        <div className="mt-1.5 mr-3 w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
+                        <p className="text-gray-600 leading-relaxed">{note}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+
+              {/* 가격 정보 */}
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <DollarSign size={24} className="mr-2 text-[#FFB602]" />
+                  {t('priceInfo')}
+                </h2>
+                <div className="overflow-hidden rounded-3xl border border-gray-100 shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-4 text-sm font-bold text-gray-600">{t('category')}</th>
+                        <th className="px-6 py-4 text-sm font-bold text-gray-600 text-right">{t('price')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      <tr>
+                        <td className="px-6 py-5 text-gray-700 font-medium">Adult (13+)</td>
+                        <td className="px-6 py-5 text-right">
+                          <span className="text-lg font-bold text-[#FFB602]">{t('won')} {selectedProduct.price.toLocaleString()}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-6 py-5 text-gray-700 font-medium">Child (3-12)</td>
+                        <td className="px-6 py-5 text-right">
+                          <span className="text-lg font-bold text-[#FFB602]">{t('won')} {(selectedProduct.price * 0.8).toLocaleString()}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* 예약 방법 */}
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <Calendar size={24} className="mr-2 text-[#FFB602]" />
+                  {t('howToReserve')}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[t('step1'), t('step2'), t('step3'), t('step4')].map((step, idx) => (
+                    <div key={idx} className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-start space-x-4">
+                      <div className="w-8 h-8 rounded-full bg-yellow-100 text-[#FFB602] flex items-center justify-center font-bold flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <p className="text-gray-700 font-medium leading-tight">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* 위치 */}
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <MapIcon size={24} className="mr-2 text-[#FFB602]" />
+                  {t('location')}
+                </h2>
+                <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-sm">
+                  <div className="h-64 bg-gray-100 relative flex items-center justify-center">
+                    <MapIcon size={48} className="text-gray-300" />
+                    <p className="absolute bottom-4 text-xs text-gray-400">Google Maps Integration Placeholder</p>
+                  </div>
+                  <div className="p-6 bg-white flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 mb-1">{t('address')}</p>
+                      <p className="text-sm text-gray-600">{selectedProduct.location[selectedLang]} 어딘가</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${selectedProduct.location[selectedLang]} 어딘가`);
+                        setToastMessage(t('addressCopied'));
+                        setTimeout(() => setToastMessage(''), 3000);
+                      }}
+                      className="flex items-center space-x-2 text-sm font-bold text-[#FFB602] hover:underline"
+                    >
+                      <Copy size={16} />
+                      <span>{t('copyAddress')}</span>
+                    </button>
                   </div>
                 </div>
-                
-                <div className="flex space-x-3">
-                  <button 
-                    onClick={() => toggleWishlist(selectedProduct.id)}
-                    className="p-4 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center bg-white"
-                  >
-                    <Heart size={24} fill={wishlist.includes(selectedProduct.id) ? "currentColor" : "none"} className={wishlist.includes(selectedProduct.id) ? "text-red-500" : ""} />
-                  </button>
-                  <button 
-                    onClick={() => addToCart(selectedProduct)}
-                    className="flex-1 border border-[#FFB602] text-[#FFB602] rounded-xl font-bold text-lg hover:bg-yellow-50 transition-colors bg-white"
-                  >
-                    {t('cart')}
-                  </button>
-                  <button 
-                    onClick={handleBook}
-                    className="flex-1 bg-[#FFB602] text-white rounded-xl font-bold text-lg hover:bg-yellow-600 transition-colors shadow-lg shadow-yellow-200"
-                  >
-                    {t('bookNow')}
+              </section>
+            </div>
+
+            {/* 오른쪽: 사이드바 (30% - Sticky) */}
+            <div className="lg:w-[32%]">
+              <div className="sticky top-24 space-y-6">
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
+                  <h3 className="text-xl font-bold text-gray-900">{t('selectOption')}</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('date')}</label>
+                      <button className="w-full flex justify-between items-center border border-gray-200 rounded-2xl p-4 hover:border-[#FFB602] transition-all bg-white text-left group">
+                        <span className="flex items-center text-gray-700 font-medium">
+                          <Calendar size={18} className="mr-3 text-gray-400 group-hover:text-[#FFB602]" />
+                          {t('selectDatePlaceholder')}
+                        </span>
+                        <ChevronDown size={18} className="text-gray-400" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('selectOption')}</label>
+                      <button className="w-full flex justify-between items-center border border-gray-200 rounded-2xl p-4 hover:border-[#FFB602] transition-all bg-white text-left group">
+                        <span className="flex items-center text-gray-700 font-medium">
+                          <Plus size={18} className="mr-3 text-gray-400 group-hover:text-[#FFB602]" />
+                          {t('selectOption')}
+                        </span>
+                        <ChevronDown size={18} className="text-gray-400" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-gray-50">
+                    <div className="flex justify-between items-end mb-6">
+                      <span className="text-gray-500 font-bold">{t('totalPrice')}</span>
+                      <div className="text-right">
+                        {selectedProduct.originalPrice && selectedProduct.originalPrice > selectedProduct.price && (
+                          <p className="text-xs text-gray-400 line-through mb-1">
+                            {t('won')} {selectedProduct.originalPrice.toLocaleString()}
+                          </p>
+                        )}
+                        <p className="text-3xl font-black text-[#FFB602]">
+                          {t('won')} {selectedProduct.price.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-3">
+                      <button 
+                        onClick={() => addToCart(selectedProduct)}
+                        className="col-span-1 flex items-center justify-center border border-gray-200 rounded-2xl text-gray-500 hover:bg-gray-50 transition-all"
+                      >
+                        <ShoppingCart size={22} />
+                      </button>
+                      <button 
+                        onClick={handleBook}
+                        className="col-span-3 bg-[#FFB602] text-white rounded-2xl font-bold text-lg py-4 hover:bg-yellow-600 transition-all shadow-lg shadow-yellow-100"
+                      >
+                        {t('bookNow')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 추가 도움말 */}
+                <div className="bg-gray-900 rounded-3xl p-6 text-white">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Need Help?</p>
+                  <p className="text-sm font-medium mb-4">Our customer support is available 24/7 for your inquiries.</p>
+                  <button className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all">
+                    Contact Support
                   </button>
                 </div>
               </div>
@@ -1298,7 +1630,7 @@ export default function App() {
 
       {/* 푸터 */}
       <footer className="bg-gray-900 text-gray-400 py-12 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
             <div>
               <h4 className="text-white font-bold mb-4">{t('customerSupport')}</h4>
@@ -1306,6 +1638,21 @@ export default function App() {
                 <li><a href="#" className="hover:text-[#FFB602] transition-colors">{t('faq')}</a></li>
                 <li><a href="#" className="hover:text-[#FFB602] transition-colors">{t('terms')}</a></li>
                 <li><a href="#" className="hover:text-[#FFB602] transition-colors">{t('privacy')}</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-bold mb-4">{t('partnership')}</h4>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a 
+                    href="https://docs.google.com/forms/d/e/1FAIpQLScioSaUuNJZNakzzHEWPPU6RUnH9Q7lh8rJqowsuSrf5IG96Q/viewform?usp=publish-editor"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-[#FFB602] transition-colors text-left"
+                  >
+                    {t('partnerInquiry')}
+                  </a>
+                </li>
               </ul>
             </div>
             <div>
