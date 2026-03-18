@@ -114,7 +114,14 @@ const TRANSLATIONS: any = {
     step4: "4단계: 예약 확정 알림을 확인하세요.",
     address: "주소",
     copyAddress: "주소 복사",
-    addressCopied: "주소가 복사되었습니다."
+    addressCopied: "주소가 복사되었습니다.",
+    popular: "인기순",
+    newest: "최신순",
+    priceLow: "가격 낮은순",
+    priceHigh: "가격 높은순",
+    allProducts: "전체 상품",
+    filter: "필터",
+    sort: "정렬"
   },
   EN: {
     searchPlaceholder: "Search destinations, stays, activities",
@@ -190,7 +197,14 @@ const TRANSLATIONS: any = {
     step4: "Step 4: Check confirmation notification.",
     address: "Address",
     copyAddress: "Copy Address",
-    addressCopied: "Address copied to clipboard."
+    addressCopied: "Address copied to clipboard.",
+    popular: "Popular",
+    newest: "Newest",
+    priceLow: "Price: Low to High",
+    priceHigh: "Price: High to Low",
+    allProducts: "All Products",
+    filter: "Filter",
+    sort: "Sort"
   },
   JA: {
     searchPlaceholder: "目的地、宿泊、アクティ비티を検索",
@@ -250,7 +264,14 @@ const TRANSLATIONS: any = {
     continueShopping: "ショッピングを続ける",
     itemCount: "個",
     partnership: "パートナーシップ",
-    partnerInquiry: "入店問い合わせ"
+    partnerInquiry: "入店問い合わせ",
+    popular: "人気順",
+    newest: "最新順",
+    priceLow: "価格の安い順",
+    priceHigh: "価格の高い順",
+    allProducts: "すべての商品",
+    filter: "フィルター",
+    sort: "並べ替え"
   },
   ZH: {
     searchPlaceholder: "搜索目的地、住宿、活动",
@@ -312,7 +333,14 @@ const TRANSLATIONS: any = {
     continueShopping: "继续购物",
     itemCount: "件",
     partnership: "合作伙伴",
-    partnerInquiry: "入驻咨询"
+    partnerInquiry: "入驻咨询",
+    popular: "热门",
+    newest: "最新",
+    priceLow: "价格从低到高",
+    priceHigh: "价格从高到低",
+    allProducts: "全部商品",
+    filter: "筛选",
+    sort: "排序"
   }
 };
 
@@ -321,8 +349,6 @@ const CATEGORIES = [
   { id: 'all', name: { KO: '전체', EN: 'All', JA: 'すべて', ZH: '全部' }, icon: <MapPin size={20} /> },
   { id: 'tour', name: { KO: '투어', EN: 'Tour', JA: 'ツアー', ZH: '旅游' }, icon: <Bus size={20} /> },
   { id: 'ticket-admission', name: { KO: '티켓&입장권', EN: 'Ticket & Admission', JA: 'チケット＆入場券', ZH: '门票' }, icon: <Ticket size={20} /> },
-  { id: 'experience', name: { KO: '체험', EN: 'Experience', JA: '体験', ZH: '体验' }, icon: <Star size={20} /> },
-  { id: 'admission', name: { KO: '입장권', EN: 'Admission', JA: '入場券', ZH: '入场券' }, icon: <Ticket size={20} /> },
   { id: 'transportation', name: { KO: '교통수단', EN: 'Transportation', JA: '交通手段', ZH: '交通工具' }, icon: <Train size={20} /> },
   { id: 'wifi-sim', name: { KO: 'Wife/Sim', EN: 'Wifi/Sim', JA: 'Wifi/Sim', ZH: 'Wifi/Sim' }, icon: <Globe size={20} /> },
 ];
@@ -363,7 +389,7 @@ const MOCK_PRODUCTS = [
       EN: ["Bringing food into the exhibition hall is prohibited.", "Pets are not allowed to enter.", "Please note that re-entry is not possible."],
       JA: ["展示館内への飲食物の持ち込みは禁止されています。", "ペット同伴の入場はできません。", "再入場はできませんのでご注意ください。"]
     },
-    category: "admission",
+    category: "ticket-admission",
     badge: {
       KO: "제주 필수코스",
       EN: "Must-visit in Jeju",
@@ -506,7 +532,7 @@ const MOCK_PRODUCTS = [
     price: 180000,
     originalPrice: 220000,
     image: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=600&auto=format&fit=crop",
-    category: "experience",
+    category: "tour",
     badge: {
       KO: "인기 숙소",
       EN: "Popular Stay",
@@ -538,7 +564,7 @@ const MOCK_PRODUCTS = [
     reviews: 6700,
     price: 66000,
     image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?q=80&w=600&auto=format&fit=crop",
-    category: "experience",
+    category: "tour",
     description: {
       KO: "육즙이 팡팡 터지는 두툼한 제주 흑돼지 근고기. 웨이팅 없이 예약한 시간에 바로 입장하여 즐길 수 있는 식사권입니다.",
       EN: "Thick Jeju black pork with bursting juices. This is a meal voucher that allows you to enter and enjoy at your reserved time without waiting.",
@@ -551,10 +577,11 @@ const MOCK_PRODUCTS = [
 // --- 컴포넌트 ---
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('home'); // 'home', 'detail'
+  const [currentView, setCurrentView] = useState('home'); // 'home', 'detail', 'mypage', 'category'
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('popular');
   const [toastMessage, setToastMessage] = useState('');
   const [selectedLang, setSelectedLang] = useState('KO');
   const [isLangOpen, setIsLangOpen] = useState(false);
@@ -755,7 +782,17 @@ export default function App() {
   const goHome = () => {
     setCurrentView('home');
     setSelectedProduct(null);
+    setActiveCategory('all');
     document.title = `Goldis trip | ${selectedLang === 'KO' ? '특별한 한국 여행의 시작' : 'Start your special Korea trip'}`;
+    window.scrollTo(0, 0);
+  };
+
+  // 카테고리 화면으로 이동
+  const goCategory = (categoryId: string) => {
+    setActiveCategory(categoryId);
+    setCurrentView('category');
+    document.title = `${CATEGORIES.find(c => c.id === categoryId)?.name[selectedLang] || 'Category'} | Goldis trip`;
+    window.scrollTo(0, 0);
   };
 
   // 상품 상세 화면으로 이동
@@ -814,7 +851,7 @@ export default function App() {
     }
   };
 
-  // 필터링된 상품 목록
+  // 필터링 및 정렬된 상품 목록
   const filteredProducts = MOCK_PRODUCTS.filter(product => {
     const matchesCategory = activeCategory === 'all' || product.category === activeCategory;
     const title = product.title[selectedLang].toLowerCase();
@@ -822,6 +859,14 @@ export default function App() {
     const matchesSearch = title.includes(searchQuery.toLowerCase()) || 
                           location.includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
+  });
+
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortBy === 'popular') return b.reviews - a.reviews;
+    if (sortBy === 'newest') return b.id - a.id;
+    if (sortBy === 'price-low') return a.price - b.price;
+    if (sortBy === 'price-high') return b.price - a.price;
+    return 0;
   });
 
   return (
@@ -1084,7 +1129,7 @@ export default function App() {
                 {CATEGORIES.map(category => (
                   <button
                     key={category.id}
-                    onClick={() => setActiveCategory(category.id)}
+                    onClick={() => goCategory(category.id)}
                     className={`flex flex-col items-center justify-center min-w-[80px] sm:min-w-[100px] py-4 rounded-2xl transition-all ${
                       activeCategory === category.id 
                         ? 'bg-yellow-50 text-[#FFB602] ring-2 ring-[#FFB602] ring-inset' 
@@ -1108,7 +1153,10 @@ export default function App() {
                 <h2 className="text-2xl font-bold">
                   {searchQuery ? `'${searchQuery}' ${t('searchResultTitle')}` : t('sectionTitle')}
                 </h2>
-                <button className="text-[#FFB602] font-medium flex items-center hover:underline">
+                <button 
+                  onClick={() => goCategory('all')}
+                  className="text-[#FFB602] font-medium flex items-center hover:underline"
+                >
                   {t('viewAll')} <ArrowRight size={16} className="ml-1" />
                 </button>
               </div>
@@ -1200,6 +1248,157 @@ export default function App() {
               )}
             </section>
           </div>
+        </main>
+      ) : currentView === 'category' ? (
+        <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          {/* 카테고리 헤더 */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
+              <button onClick={goHome} className="hover:text-[#FFB602] transition-colors">Home</button>
+              <ChevronRight size={14} />
+              <span className="text-gray-900 font-bold">
+                {CATEGORIES.find(c => c.id === activeCategory)?.name[selectedLang] || t('allProducts')}
+              </span>
+            </div>
+            
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
+                  {CATEGORIES.find(c => c.id === activeCategory)?.name[selectedLang] || t('allProducts')}
+                </h1>
+                <p className="text-gray-500">
+                  {sortedProducts.length} {t('itemCount')} {t('searchResultTitle')}
+                </p>
+              </div>
+              
+              {/* 정렬 및 필터 바 */}
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
+                  <Filter size={16} className="text-gray-400 mr-2" />
+                  <select 
+                    className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="popular">{t('popular')}</option>
+                    <option value="newest">{t('newest')}</option>
+                    <option value="price-low">{t('priceLow')}</option>
+                    <option value="price-high">{t('priceHigh')}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 카테고리 퀵 네비게이션 */}
+          <div className="flex overflow-x-auto pb-6 mb-8 hide-scrollbar space-x-2">
+            {CATEGORIES.map(category => (
+              <button
+                key={category.id}
+                onClick={() => goCategory(category.id)}
+                className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
+                  activeCategory === category.id 
+                    ? 'bg-[#FFB602] text-white shadow-md' 
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-[#FFB602] hover:text-[#FFB602]'
+                }`}
+              >
+                {category.name[selectedLang]}
+              </button>
+            ))}
+          </div>
+
+          {/* 상품 그리드 */}
+          {sortedProducts.length === 0 ? (
+            <div className="text-center py-32 bg-white rounded-3xl border border-dashed border-gray-200">
+              <div className="bg-gray-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search size={32} className="text-gray-300" />
+              </div>
+              <p className="text-gray-500 text-lg font-medium">{t('noResult')}</p>
+              <button 
+                onClick={goHome}
+                className="mt-6 px-8 py-3 bg-[#FFB602] text-white rounded-xl font-bold hover:bg-yellow-600 transition-all"
+              >
+                {t('backToList')}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10">
+              {sortedProducts.map(product => (
+                <div 
+                  key={product.id} 
+                  className="flex flex-col cursor-pointer group"
+                  onClick={() => goDetail(product)}
+                >
+                  {/* 썸네일 */}
+                  <div className="relative aspect-[4/3] rounded-2xl overflow-hidden mb-4 shadow-sm">
+                    <img 
+                      src={product.image} 
+                      alt={product.title[selectedLang]} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                    {product.badge && (
+                      <div className="absolute top-3 left-3 bg-[#FFB602] text-white text-[11px] font-extrabold px-2 py-1 rounded-lg shadow-md">
+                        {product.badge[selectedLang]}
+                      </div>
+                    )}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWishlist(product.id);
+                      }}
+                      className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-md rounded-full text-gray-600 hover:text-red-500 hover:bg-white transition-all shadow-lg"
+                    >
+                      <Heart size={18} fill={wishlist.includes(product.id) ? "currentColor" : "none"} className={wishlist.includes(product.id) ? "text-red-500" : ""} />
+                    </button>
+                  </div>
+                  
+                  {/* 정보 */}
+                  <div className="flex-1 flex flex-col px-1">
+                    <div className="flex items-center text-[12px] text-gray-500 mb-2 font-semibold">
+                      <MapPin size={12} className="mr-1 text-gray-400" />
+                      <span>{product.location[selectedLang]}</span>
+                      <span className="mx-2 text-gray-300">|</span>
+                      <span>{CATEGORIES.find(c => c.id === product.category)?.name[selectedLang]}</span>
+                    </div>
+                    
+                    <h3 className="text-base font-bold text-gray-900 leading-tight mb-2 line-clamp-2 group-hover:text-[#FFB602] transition-colors">
+                      {product.title[selectedLang]}
+                    </h3>
+                    
+                    <div className="mt-auto">
+                      <div className="flex items-center text-xs mb-3">
+                        <div className="flex items-center text-[#FFB602] font-bold bg-yellow-50 px-2 py-0.5 rounded-md">
+                          <Star size={12} fill="currentColor" className="mr-1"/>
+                          {product.rating}
+                        </div>
+                        <span className="text-gray-400 ml-2 font-medium">{product.reviews.toLocaleString()} {t('reviews')}</span>
+                      </div>
+                      
+                      <div className="flex items-baseline justify-between">
+                        <div className="flex items-baseline space-x-2">
+                          <span className="text-xl font-black text-gray-900">
+                            <span className="text-sm font-bold mr-0.5">{t('won')}</span>
+                            {product.price.toLocaleString()}
+                          </span>
+                          {product.originalPrice && (
+                            <span className="text-xs text-gray-400 line-through font-medium">
+                              {product.originalPrice.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        {product.originalPrice && (
+                          <span className="text-sm font-black text-red-500">
+                            {Math.round((1 - product.price / product.originalPrice) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </main>
       ) : currentView === 'mypage' ? (
         <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
