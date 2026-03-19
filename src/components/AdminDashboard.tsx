@@ -14,13 +14,14 @@ import {
   collection, query, getDocs, doc, setDoc, updateDoc, deleteDoc, 
   onSnapshot, orderBy, limit, where, Timestamp 
 } from 'firebase/firestore';
+import { GoogleGenAI, Type } from "@google/genai";
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { TRANSLATIONS } from '../App';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 // --- Types ---
 interface AdminDashboardProps {
@@ -60,6 +61,39 @@ const CATEGORY_DATA = [
 
 const COLORS = ['#FFB602', '#FF6321', '#000000', '#4A4A4A'];
 
+// --- Helpers ---
+const convertGoogleDriveLink = (url: string) => {
+  if (!url) return '';
+  // Handle Google Drive view link
+  const driveMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch && driveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  }
+  return url;
+};
+
+const extractIframeSrc = (html: string) => {
+  if (!html) return '';
+  if (html.startsWith('<iframe')) {
+    const srcMatch = html.match(/src="([^"]+)"/);
+    if (srcMatch && srcMatch[1]) {
+      return srcMatch[1];
+    }
+  }
+  return html;
+};
+
+const safeFormatDate = (date: any, formatStr: string = 'yyyy-MM-dd') => {
+  if (!date) return '-';
+  try {
+    const d = date.toDate ? date.toDate() : new Date(date);
+    if (isNaN(d.getTime())) return '-';
+    return format(d, formatStr);
+  } catch (e) {
+    return '-';
+  }
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selectedLang }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -68,6 +102,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
   const [products, setProducts] = useState<any[]>([]);
   const [cmsContent, setCmsContent] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
   
@@ -97,6 +132,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
     mapUrl: '',
   });
   const [formTab, setFormTab] = useState('KO');
+
+  const handleTranslateAll = async () => {
+    if (isTranslating) return;
+    
+    const sourceLang = formTab;
+    const targetLangs = ['KO', 'EN', 'JA', 'ZH_CN', 'ZH_TW', 'ZH_HK'].filter(l => l !== sourceLang);
+    
+    const fieldsToTranslate = [
+      'title', 'location', 'description', 'introduction', 
+      'whyRecommend', 'keepInMind', 'howToReserve', 'badge', 'address'
+    ];
+    
+    const sourceData: any = {};
+    fieldsToTranslate.forEach(field => {
+      sourceData[field] = newProduct[field][sourceLang];
+    });
+    
+    // Check if there's anything to translate
+    if (Object.values(sourceData).every(v => !v)) {
+      setNotification({ message: '번역할 내용이 없습니다.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    setIsTranslating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const model = "gemini-3-flash-preview";
+      
+      const prompt = `Translate the following travel product information from ${sourceLang} to ${targetLangs.join(', ')}.
+      The input data is a JSON object where keys are field names and values are the text to translate.
+      Return the translations as a JSON object where each key is a target language code (EN, JA, ZH_CN, ZH_TW, ZH_HK, KO) and the value is another object with the translated fields.
+      
+      Input Data: ${JSON.stringify(sourceData)}
+      
+      Important:
+      - Maintain the same field names.
+      - Keep HTML tags if present (especially in description, introduction, etc.).
+      - Ensure the tone is professional and inviting for a travel platform.
+      - Return ONLY the JSON object.`;
+
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: targetLangs.reduce((acc: any, lang) => {
+              acc[lang] = {
+                type: Type.OBJECT,
+                properties: fieldsToTranslate.reduce((fAcc: any, field) => {
+                  fAcc[field] = { type: Type.STRING };
+                  return fAcc;
+                }, {})
+              };
+              return acc;
+            }, {})
+          }
+        }
+      });
+
+      const translations = JSON.parse(response.text);
+      
+      const updatedProduct = { ...newProduct };
+      targetLangs.forEach(lang => {
+        if (translations[lang]) {
+          fieldsToTranslate.forEach(field => {
+            if (translations[lang][field]) {
+              updatedProduct[field] = {
+                ...updatedProduct[field],
+                [lang]: translations[lang][field]
+              };
+            }
+          });
+        }
+      });
+      
+      setNewProduct(updatedProduct);
+      setNotification({ message: '모든 언어로 번역이 완료되었습니다.', type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+    } catch (error) {
+      console.error("Translation error:", error);
+      setNotification({ message: '번역 중 오류가 발생했습니다.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const formatPrice = (price: number) => {
     const langData = TRANSLATIONS[selectedLang] || TRANSLATIONS.KO;
@@ -155,6 +279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
         const productRef = doc(collection(db, 'products'));
         await setDoc(productRef, {
           ...newProduct,
+          id: productRef.id,
           createdAt: new Date().toISOString()
         });
         setNotification({ message: '신규 상품이 성공적으로 등록되었습니다.', type: 'success' });
@@ -229,19 +354,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
       </div>
       
       <div className="p-6 space-y-8">
-        {/* Language Tabs */}
-        <div className="flex space-x-2 p-1 bg-gray-100 rounded-xl w-fit">
-          {['KO', 'EN', 'JA', 'ZH_CN', 'ZH_TW', 'ZH_HK'].map(lang => (
-            <button
-              key={lang}
-              onClick={() => setFormTab(lang)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                formTab === lang ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {lang}
-            </button>
-          ))}
+        {/* Language Tabs & Translation */}
+        <div className="flex items-center justify-between">
+          <div className="flex space-x-2 p-1 bg-gray-100 rounded-xl w-fit">
+            {['KO', 'EN', 'JA', 'ZH_CN', 'ZH_TW', 'ZH_HK'].map(lang => (
+              <button
+                key={lang}
+                onClick={() => setFormTab(lang)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  formTab === lang ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {lang}
+              </button>
+            ))}
+          </div>
+          
+          <button
+            onClick={handleTranslateAll}
+            disabled={isTranslating}
+            className={`flex items-center space-x-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              isTranslating 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-sm'
+            }`}
+          >
+            <Globe size={14} className={isTranslating ? 'animate-spin' : ''} />
+            <span>{isTranslating ? '번역 중...' : '모든 언어로 번역'}</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -338,7 +478,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
             <input 
               type="text" 
               value={newProduct.image}
-              onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+              onChange={(e) => setNewProduct({ ...newProduct, image: convertGoogleDriveLink(e.target.value) })}
               className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20"
               placeholder="https://..."
             />
@@ -377,7 +517,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
             <input 
               type="text" 
               value={newProduct.mapUrl}
-              onChange={(e) => setNewProduct({ ...newProduct, mapUrl: e.target.value })}
+              onChange={(e) => setNewProduct({ ...newProduct, mapUrl: extractIframeSrc(e.target.value) })}
               className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20"
               placeholder="https://www.google.com/maps/embed?..."
             />
@@ -393,7 +533,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
                   value={newProduct.gallery[idx] || ''}
                   onChange={(e) => {
                     const newGallery = [...newProduct.gallery];
-                    newGallery[idx] = e.target.value;
+                    newGallery[idx] = convertGoogleDriveLink(e.target.value);
                     setNewProduct({ ...newProduct, gallery: newGallery });
                   }}
                   className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20"
@@ -562,7 +702,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {bookings.length > 0 ? bookings.slice(0, 5).map((booking) => (
+              {bookings?.length > 0 ? bookings.slice(0, 5).map((booking) => (
                 <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 text-sm font-mono">{booking.id.slice(0, 8)}</td>
                   <td className="py-4 text-sm">{booking.userEmail}</td>
@@ -661,7 +801,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {products.map((product) => (
+              {products?.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center space-x-3">
@@ -782,12 +922,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {bookings.map((booking) => (
+              {bookings?.map((booking) => (
                 <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4 text-sm font-mono">{booking.id.slice(0, 10)}</td>
                   <td className="p-4">
                     <div className="text-sm font-medium">{booking.userEmail}</div>
-                    <div className="text-xs text-gray-400">{format(new Date(booking.createdAt), 'yyyy-MM-dd HH:mm')}</div>
+                    <div className="text-xs text-gray-400">{safeFormatDate(booking.createdAt, 'yyyy-MM-dd HH:mm')}</div>
                   </td>
                   <td className="p-4">
                     <div className="text-sm">{booking.productTitle}</div>
@@ -863,7 +1003,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {users.map((user) => (
+              {users?.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center space-x-3">
@@ -884,7 +1024,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
                     </span>
                   </td>
                   <td className="p-4 text-sm text-gray-600">
-                    {user.createdAt ? format(new Date(user.createdAt), 'yyyy-MM-dd') : '-'}
+                    {safeFormatDate(user.createdAt)}
                   </td>
                   <td className="p-4 text-sm font-bold">3</td>
                   <td className="p-4">
