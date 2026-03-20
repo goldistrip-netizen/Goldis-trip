@@ -65,8 +65,8 @@ service cloud.firestore {
     // Rules
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || request.auth.token.email == "goldistrip@gmail.com")) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -97,6 +97,16 @@ service cloud.firestore {
     match /stats/{date} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    match /verification_codes/{email} {
+      allow read, write: if true;
+    }
+
+    match /registered_emails/{email} {
+      allow get: if true;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid;
+      allow delete: if isAdmin();
     }
   }
 }

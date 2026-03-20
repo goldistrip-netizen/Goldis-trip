@@ -88,6 +88,28 @@
         "newUsers": { "type": "integer", "description": "Number of new signups for the day" }
       },
       "required": ["date"]
+    },
+    "verification_codes": {
+      "title": "Verification Code",
+      "description": "Stores temporary 6-digit codes for email verification.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "code": { "type": "string", "description": "6-digit verification code" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "code", "expiresAt"]
+    },
+    "registered_emails": {
+      "title": "Registered Email",
+      "description": "Stores registered email addresses to enforce uniqueness during signup.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The UID of the user associated with this email" },
+        "registeredAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid"]
     }
   },
   "firestore": {
@@ -114,6 +136,14 @@
     "/stats/{date}": {
       "schema": "stats",
       "description": "Daily analytics statistics."
+    },
+    "/verification_codes/{email}": {
+      "schema": "verification_codes",
+      "description": "Temporary verification codes for email signup."
+    },
+    "/registered_emails/{email}": {
+      "schema": "registered_emails",
+      "description": "Registered email addresses for uniqueness checks."
     }
   }
 }

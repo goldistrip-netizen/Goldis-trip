@@ -10,13 +10,14 @@ import {
   Train, Bus, Utensils, Bed, ChevronDown, Share2,
   Instagram, Facebook, MessageCircle, Globe, X, LogOut,
   CreditCard, Settings, ChevronRight, Briefcase, UserPlus,
-  CheckCircle2, Info, Map as MapIcon, Copy, Plus, DollarSign, Filter
+  CheckCircle2, Info, Map as MapIcon, Copy, Plus, DollarSign, Filter, Minus
 } from 'lucide-react';
 import { auth, db, googleProvider, facebookProvider, appleProvider, handleFirestoreError, OperationType } from './firebase';
 import { 
-  signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser 
+  signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot, query, collection, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, onSnapshot, query, collection, orderBy, limit, where, getDocs } from 'firebase/firestore';
 import { AdminDashboard } from './components/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -28,6 +29,13 @@ interface UserProfile {
   role?: 'user' | 'admin';
   isBlacklisted?: boolean;
   wishlist?: number[];
+  nickname?: string;
+  country?: string;
+  gender?: 'male' | 'female' | 'other';
+  preferredLanguage?: string;
+  birthDate?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 interface CartItem {
@@ -37,6 +45,42 @@ interface CartItem {
   image: string;
   quantity: number;
 }
+
+export const COUNTRIES = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+  "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi",
+  "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
+  "Denmark", "Djibouti", "Dominica", "Dominican Republic",
+  "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia",
+  "Fiji", "Finland", "France",
+  "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana",
+  "Haiti", "Honduras", "Hungary",
+  "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Ivory Coast",
+  "Jamaica", "Japan", "Jordan",
+  "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan",
+  "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg",
+  "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar",
+  "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway",
+  "Oman",
+  "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal",
+  "Qatar",
+  "Romania", "Russia", "Rwanda",
+  "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria",
+  "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
+  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan",
+  "Vanuatu", "Vatican City", "Venezuela", "Vietnam",
+  "Yemen",
+  "Zambia", "Zimbabwe", "Hong Kong", "Macau"
+].sort();
+
+export const LANGUAGES = [
+  { code: 'KO', name: '한국어' },
+  { code: 'EN', name: 'English' },
+  { code: 'JA', name: '日本語' },
+  { code: 'ZH_CN', name: '중국어 간체' },
+  { code: 'ZH_TW', name: '번체 대만' },
+  { code: 'ZH_HK', name: '번체 홍콩' }
+];
 
 export const TRANSLATIONS: any = {
   KO: {
@@ -67,6 +111,7 @@ export const TRANSLATIONS: any = {
     socialMedia: "소셜 미디어",
     langChanged: "언어가 한국어로 변경되었습니다.",
     booked: "예약이 완료되었습니다!",
+    bookingSuccess: "예약이 신청되었습니다. 관리자 승인 후 확정됩니다.",
     copied: "링크가 클립보드에 복사되었습니다!",
     searchBtn: "검색",
     won: "₩",
@@ -74,7 +119,35 @@ export const TRANSLATIONS: any = {
     exchangeRate: 1,
     loginTitle: "로그인",
     loginSubtitle: "Goldistrip의 다양한 혜택을 누려보세요",
+    email: "이메일",
+    password: "비밀번호",
+    findPassword: "비밀번호 찾기",
+    signUp: "회원가입",
+    or: "또는",
+    selectLanguage: "언어 선택",
     googleLogin: "Google로 로그인",
+    verificationCode: "인증번호",
+    sendCode: "인증번호 발송",
+    verify: "인증하기",
+    codeSent: "인증번호가 발송되었습니다.",
+    invalidCode: "인증번호가 올바르지 않거나 만료되었습니다.",
+    resendCode: "인증번호 재발송",
+    passwordResetSent: "비밀번호 재설정 이메일이 발송되었습니다.",
+    resetEmailError: "재설정 이메일 발송 중 오류가 발생했습니다.",
+    signUpSuccess: "회원가입이 완료되었습니다!",
+    remainingTime: "남은 시간",
+    timeRemaining: "남은 시간",
+    signupTitle: "회원가입",
+    verifyTitle: "이메일 인증",
+    findPasswordTitle: "비밀번호 찾기",
+    signupSubtitle: "Goldistrip의 새로운 회원이 되어보세요",
+    signupStep1Subtitle: "인증코드를 받을 이메일을 입력해주세요",
+    signupStep2Subtitle: "회원가입을 완료하기 위해 상세 정보를 입력해주세요",
+    verifySubtitle: "이메일로 발송된 인증번호를 입력해주세요",
+    findPasswordSubtitle: "가입하신 이메일 주소를 입력해주세요",
+    backToLogin: "로그인으로 돌아가기",
+    back: "뒤로",
+    sendResetEmail: "재설정 이메일 발송",
     facebookLogin: "Facebook으로 로그인",
     appleLogin: "Apple로 로그인",
     lineLogin: "LINE으로 로그인",
@@ -123,7 +196,46 @@ export const TRANSLATIONS: any = {
     priceHigh: "가격 높은순",
     allProducts: "전체 상품",
     filter: "필터",
-    sort: "정렬"
+    sort: "정렬",
+    verifyEmailBtn: "이메일 인증",
+    nextBtn: "다음",
+    signUpBtn: "회원가입",
+    nicknameLabel: "닉네임",
+    firstNameLabel: "이름",
+    lastNameLabel: "성",
+    countryLabel: "국가",
+    genderLabel: "성별",
+    languageLabel: "선호 언어",
+    birthDateLabel: "생년월일 (YYYYMMDD)",
+    male: "남성",
+    female: "여성",
+    other: "기타",
+    selectCountry: "국가 선택",
+    selectGender: "성별 선택",
+    emailVerified: "이메일 인증 완료! 상세 정보를 입력해주세요.",
+    fillRequired: "모든 필수 항목을 입력해주세요.",
+    fixErrors: "회원가입 전 오류를 수정해주세요.",
+    signingUp: "회원가입 중...",
+    weakPassword: "비밀번호가 너무 취약합니다.",
+    emailInUse: "이미 사용 중인 이메일입니다.",
+    authNotEnabled: "이메일/비밀번호 로그인이 활성화되지 않았습니다.",
+    passwordRequirement: "비밀번호는 8자 이상이어야 하며 문자와 숫자를 모두 포함해야 합니다.",
+    passwordsDoNotMatch: "비밀번호가 일치하지 않습니다.",
+    birthDateRequirement: "생년월일은 8자리 숫자(YYYYMMDD)여야 합니다.",
+    verifyError: "인증번호 확인 중 오류가 발생했습니다.",
+    signUpError: "계정 생성 중 오류가 발생했습니다.",
+    confirmPasswordLabel: "비밀번호 확인",
+    searchCountry: "국가 검색...",
+    select: "선택",
+    enterEmailPassword: "이메일과 비밀번호를 입력해주세요.",
+    invalidCredentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    tooManyRequests: "너무 많은 로그인 시도가 발생했습니다. 나중에 다시 시도하거나 비밀번호를 재설정해주세요.",
+    enterEmail: "이메일을 입력해주세요.",
+    invalidEmail: "올바른 이메일 형식을 입력해주세요.",
+    emailAlreadyRegistered: "이미 가입된 이메일입니다. 로그인해주세요.",
+    sendingVerification: "인증번호 발송 중...",
+    verificationSent: "이메일로 인증번호가 발송되었습니다.",
+    verificationSendError: "인증번호 발송 중 오류가 발생했습니다. 다시 시도해주세요."
   },
   EN: {
     searchPlaceholder: "Search destinations, stays, activities",
@@ -153,6 +265,7 @@ export const TRANSLATIONS: any = {
     socialMedia: "Social Media",
     langChanged: "Language changed to English.",
     booked: "Booking completed!",
+    bookingSuccess: "Booking requested. It will be confirmed after admin approval.",
     copied: "Link copied to clipboard!",
     searchBtn: "Search",
     won: "KRW",
@@ -160,7 +273,35 @@ export const TRANSLATIONS: any = {
     exchangeRate: 1300,
     loginTitle: "Login",
     loginSubtitle: "Enjoy various benefits of Goldistrip",
+    email: "Email",
+    password: "Password",
+    findPassword: "Find Password",
+    signUp: "Sign Up",
+    or: "OR",
+    selectLanguage: "Select Language",
     googleLogin: "Login with Google",
+    verificationCode: "Verification Code",
+    sendCode: "Send Code",
+    verify: "Verify",
+    codeSent: "Verification code has been sent.",
+    invalidCode: "Invalid or expired code.",
+    resendCode: "Resend Code",
+    passwordResetSent: "Password reset email has been sent.",
+    resetEmailError: "Error sending reset email.",
+    signUpSuccess: "Sign up successful!",
+    remainingTime: "Remaining Time",
+    timeRemaining: "Time Remaining",
+    signupTitle: "Sign Up",
+    verifyTitle: "Email Verification",
+    findPasswordTitle: "Find Password",
+    signupSubtitle: "Become a member of Goldistrip",
+    signupStep1Subtitle: "Enter your email to receive a verification code",
+    signupStep2Subtitle: "Please provide your details to finish signing up",
+    verifySubtitle: "Enter the verification code sent to your email",
+    findPasswordSubtitle: "Enter your registered email address",
+    backToLogin: "Back to Login",
+    back: "Back",
+    sendResetEmail: "Send Reset Email",
     facebookLogin: "Login with Facebook",
     appleLogin: "Login with Apple",
     lineLogin: "Login with LINE",
@@ -209,7 +350,46 @@ export const TRANSLATIONS: any = {
     priceHigh: "Price: High to Low",
     allProducts: "All Products",
     filter: "Filter",
-    sort: "Sort"
+    sort: "Sort",
+    verifyEmailBtn: "Verify Email",
+    nextBtn: "Next",
+    signUpBtn: "Sign Up",
+    nicknameLabel: "Nickname",
+    firstNameLabel: "First Name",
+    lastNameLabel: "Last Name",
+    countryLabel: "Country",
+    genderLabel: "Gender",
+    languageLabel: "Preferred Language",
+    birthDateLabel: "Birth Date (YYYYMMDD)",
+    male: "Male",
+    female: "Female",
+    other: "Other",
+    selectCountry: "Select Country",
+    selectGender: "Select Gender",
+    emailVerified: "Email verified! Please fill in your details.",
+    fillRequired: "Please fill in all required fields.",
+    fixErrors: "Please fix the errors before signing up.",
+    signingUp: "Signing up...",
+    weakPassword: "The password is too weak.",
+    emailInUse: "This email is already in use.",
+    authNotEnabled: "Email/Password sign-in is not enabled in Firebase Console.",
+    passwordRequirement: "Password must be at least 8 characters long and include both letters and numbers.",
+    passwordsDoNotMatch: "Passwords do not match.",
+    birthDateRequirement: "Birth date must be 8 digits (YYYYMMDD).",
+    verifyError: "Error verifying code.",
+    signUpError: "Error creating account.",
+    confirmPasswordLabel: "Confirm Password",
+    searchCountry: "Search country...",
+    select: "Select",
+    enterEmailPassword: "Please enter email and password.",
+    invalidCredentials: "Invalid email or password. Please try again.",
+    tooManyRequests: "Too many failed login attempts. Please try again later or reset your password.",
+    enterEmail: "Please enter email.",
+    invalidEmail: "Please enter a valid email address.",
+    emailAlreadyRegistered: "This email is already registered. Please login.",
+    sendingVerification: "Sending verification code...",
+    verificationSent: "Verification code sent to your email.",
+    verificationSendError: "Error sending verification code. Please try again."
   },
   JA: {
     searchPlaceholder: "目的地、宿泊、アクティビティを検索",
@@ -239,6 +419,7 @@ export const TRANSLATIONS: any = {
     socialMedia: "ソーシャルメディア",
     langChanged: "言語が日本語に変更されました。",
     booked: "予約が完了しました！",
+    bookingSuccess: "予約が申請されました。管理者の承認後に確定します。",
     copied: "リンクがクリップボードにコピーされました！",
     searchBtn: "検索",
     won: "₩",
@@ -246,7 +427,35 @@ export const TRANSLATIONS: any = {
     exchangeRate: 9,
     loginTitle: "ログイン",
     loginSubtitle: "Goldistripの多様な特典をお楽しみください",
+    email: "メール",
+    password: "パスワード",
+    findPassword: "パスワードをお忘れですか？",
+    signUp: "新規登録",
+    or: "または",
+    selectLanguage: "言語を選択",
     googleLogin: "Googleでログイン",
+    verificationCode: "認証番号",
+    sendCode: "認証番号を送信",
+    verify: "認証する",
+    codeSent: "認証番号が送信されました。",
+    invalidCode: "認証番号が正しくないか、期限切れです。",
+    resendCode: "認証番号を再送信",
+    passwordResetSent: "パスワード再設定メールを送信しました。",
+    resetEmailError: "再設定メールの送信中にエラーが発生しました。",
+    signUpSuccess: "会員登録が完了しました！",
+    remainingTime: "残り時間",
+    timeRemaining: "残り時間",
+    signupTitle: "会員登録",
+    verifyTitle: "メール認証",
+    findPasswordTitle: "パスワードをお忘れの方",
+    signupSubtitle: "Goldistripの新しい会員になりましょう",
+    signupStep1Subtitle: "認証コードを受け取るメールアドレスを入力してください",
+    signupStep2Subtitle: "会員登録を完了するために詳細情報を入力してください",
+    verifySubtitle: "メールに送信された認証番号を入力してください",
+    findPasswordSubtitle: "登録したメールアドレスを入力してください",
+    backToLogin: "ログインに戻る",
+    back: "戻る",
+    sendResetEmail: "再設定メールを送信",
     facebookLogin: "Facebookでログイン",
     appleLogin: "Appleでログイン",
     lineLogin: "LINEでログイン",
@@ -256,7 +465,7 @@ export const TRANSLATIONS: any = {
     myPage: "マイページ",
     reservations: "予約履歴",
     coupons: "クーポン",
-    paymentMethods: "決済手段",
+    paymentMethods: "決済方法",
     wishlist: "ウィッシュリスト",
     myProfile: "プロフィール",
     points: "ポイント",
@@ -267,21 +476,21 @@ export const TRANSLATIONS: any = {
     editProfile: "プロフィール編集",
     cartEmpty: "カートは空です。",
     addedToCart: "カートに追加されました。",
-    addToCart: "カートに追加",
-    adminDashboard: "管理員ダッシュボード",
+    addToCart: "カートに入れる",
+    adminDashboard: "管理者ダッシュボード",
     checkout: "決済する",
     continueShopping: "ショッピングを続ける",
     itemCount: "個",
     partnership: "パートナーシップ",
-    partnerInquiry: "入店問い合わせ",
+    partnerInquiry: "出店のお問い合わせ",
     bookedCountLabel: "予約",
     introduction: "商品紹介",
-    whyRecommend: "Goldistripがおすすめする理由",
+    whyRecommend: "Goldistripのおすすめ理由",
     thingsToKeepInMind: "注意事項",
     priceInfo: "価格情報",
     howToReserve: "予約方法",
-    location: "位置",
-    selectOption: "オプション選択",
+    location: "場所",
+    selectOption: "オプションを選択",
     step1: "ステップ1：日付とオプションの選択",
     step2: "ステップ2：予約情報の入力",
     step3: "ステップ3：決済完了",
@@ -295,7 +504,50 @@ export const TRANSLATIONS: any = {
     priceHigh: "価格の高い順",
     allProducts: "すべての商品",
     filter: "フィルター",
-    sort: "並べ替え"
+    sort: "並べ替え",
+    verifyEmailBtn: "メール認証",
+    nextBtn: "次へ",
+    signUpBtn: "新規登録",
+    nicknameLabel: "ニックネーム",
+    firstNameLabel: "名",
+    lastNameLabel: "姓",
+    countryLabel: "国",
+    genderLabel: "性別",
+    languageLabel: "優先言語",
+    birthDateLabel: "生年月日 (YYYYMMDD)",
+    male: "男性",
+    female: "女性",
+    other: "その他",
+    selectCountry: "国を選択",
+    selectGender: "性別を選択",
+    emailVerified: "メール認証完了！詳細情報を入力してください。",
+    fillRequired: "すべての必須項目を入力してください。",
+    fixErrors: "登録前にエラーを修正してください。",
+    signingUp: "登録中...",
+    weakPassword: "パスワードが弱すぎます。",
+    emailInUse: "このメールアドレスは既に使用されています。",
+    authNotEnabled: "Firebaseコンソールでメール/パスワードログインが有効になっていません。",
+    passwordRequirement: "パスワードは8文字以上で、英字と数字の両方を含める必要があります。",
+    passwordsDoNotMatch: "パスワードが一致しません。",
+    birthDateRequirement: "生年月日は8桁の数字（YYYYMMDD）である必要があります。",
+    verifyError: "コードの確認中にエラーが発生しました。",
+    signUpError: "アカウント作成中にエラーが発生しました。",
+    signupStep1Subtitle: "認証コードを受け取るメールアドレスを入力してください",
+    signupStep2Subtitle: "会員登録を完了するために詳細情報を入力してください",
+    confirmPasswordLabel: "パスワード再入力",
+    searchCountry: "国を検索...",
+    select: "選択",
+    enterEmailPassword: "メールアドレスとパスワードを入力してください。",
+    invalidCredentials: "メールアドレスまたはパスワードが正しくありません。",
+    tooManyRequests: "ログイン試行回数が多すぎます。しばらくしてからもう一度お試しいただくか、パスワードをリセットしてください。",
+    enterEmail: "メールアドレスを入力してください。",
+    invalidEmail: "有効なメールアドレスを入力してください。",
+    emailAlreadyRegistered: "このメールアドレスは既に登録されています。ログインしてください。",
+    sendingVerification: "認証コードを送信中...",
+    verificationSent: "メールに認証コードを送信しました。",
+    verificationSendError: "認証コードの送信中にエラーが発生しました。もう一度お試しください。",
+    passwordResetSent: "パスワード再設定メールを送信しました。",
+    resetEmailError: "再設定メールの送信中にエラーが発生しました。"
   },
   ZH_CN: {
     searchPlaceholder: "搜索目的地、住宿、活动",
@@ -332,7 +584,32 @@ export const TRANSLATIONS: any = {
     exchangeRate: 180,
     loginTitle: "登录",
     loginSubtitle: "享受 Goldistrip 的各项优惠",
+    email: "邮箱",
+    password: "密码",
+    findPassword: "找回密码",
+    signUp: "注册",
+    or: "或",
+    selectLanguage: "选择语言",
     googleLogin: "使用 Google 登录",
+    verificationCode: "验证码",
+    sendCode: "发送验证码",
+    verify: "验证",
+    codeSent: "验证码已发送。",
+    invalidCode: "验证码无效或已过期。",
+    resendCode: "重新发送验证码",
+    passwordResetSent: "密码重置邮件已发送。",
+    signUpSuccess: "注册成功！",
+    remainingTime: "剩余时间",
+    timeRemaining: "剩余时间",
+    signupTitle: "注册",
+    verifyTitle: "邮箱验证",
+    findPasswordTitle: "找回密码",
+    signupSubtitle: "成为 Goldistrip 的新会员",
+    verifySubtitle: "请输入发送到您邮箱的验证码",
+    findPasswordSubtitle: "请输入您注册的邮箱地址",
+    backToLogin: "返回登录",
+    back: "返回",
+    sendResetEmail: "发送重置邮件",
     facebookLogin: "使用 Facebook 登录",
     appleLogin: "使用 Apple 登录",
     lineLogin: "使用 LINE 登录",
@@ -381,44 +658,72 @@ export const TRANSLATIONS: any = {
     priceHigh: "价格从高到低",
     allProducts: "全部商品",
     filter: "筛选",
-    sort: "排序"
+    sort: "排序",
+    verifyEmailBtn: "验证邮箱",
+    nextBtn: "下一步",
+    signUpBtn: "注册",
+    nicknameLabel: "昵称",
+    firstNameLabel: "名字",
+    lastNameLabel: "姓氏",
+    countryLabel: "国家",
+    genderLabel: "性别",
+    languageLabel: "首选语言",
+    birthDateLabel: "出生日期 (YYYYMMDD)",
+    male: "男",
+    female: "女",
+    other: "其他",
+    selectCountry: "选择国家",
+    selectGender: "选择性别",
+    emailVerified: "邮箱验证成功！请填写您的详细信息。",
+    fillRequired: "请填写所有必填字段。",
+    fixErrors: "请在注册前修正错误。",
+    signingUp: "正在注册...",
+    weakPassword: "密码太弱。",
+    emailInUse: "此邮箱已被使用。",
+    authNotEnabled: "Firebase 控制台中未启用邮箱/密码登录。",
+    passwordRequirement: "密码必须至少为 8 个字符，且包含字母和数字。",
+    passwordsDoNotMatch: "密码不匹配。",
+    birthDateRequirement: "出生日期必须为 8 位数字 (YYYYMMDD)。",
+    verifyError: "验证验证码时出错。",
+    signUpError: "创建帐户时出错。",
+    signupStep1Subtitle: "请输入您的邮箱以接收验证码",
+    signupStep2Subtitle: "请提供您的详细信息以完成注册",
+    confirmPasswordLabel: "确认密码",
+    searchCountry: "搜索国家...",
+    select: "选择",
+    enterEmailPassword: "请输入邮箱和密码。",
+    invalidCredentials: "邮箱或密码无效。请重试。",
+    tooManyRequests: "登录尝试次数过多。请稍后再试或重置密码。",
+    enterEmail: "请输入邮箱。",
+    invalidEmail: "请输入有效的电子邮箱地址。",
+    emailAlreadyRegistered: "该邮箱已注册。请登录。",
+    sendingVerification: "正在发送验证码...",
+    verificationSent: "验证码已发送到您的邮箱。",
+    verificationSendError: "发送验证码时出错。请重试。",
+    passwordResetSent: "密码重置邮件已发送。",
+    resetEmailError: "发送重置邮件时出错。"
   },
   ZH_TW: {
-    searchPlaceholder: "搜尋目的地、住宿、活動",
-    heroSearchPlaceholder: "你要去哪裡？",
-    login: "登入",
-    heroTitle: "在 Goldistrip 開啟您的在地之旅",
-    categoryTitle: "您在尋找什麼樣的在地體驗？",
-    sectionTitle: "Goldistrip 推薦的在地活動與住宿",
-    searchResultTitle: "在地旅行搜尋結果",
-    viewAll: "查看全部",
-    noResult: "沒有找到符合條件的在地商品。",
-    backToList: "返回列表",
-    reviews: "條評價",
-    selectDate: "選擇日期",
-    selectDatePlaceholder: "請選擇您的訪問日期",
-    totalPrice: "總計金額",
-    cart: "購物車",
-    bookNow: "立即預訂",
-    customerSupport: "客戶支援",
-    faq: "常見問題",
-    terms: "使用條款",
-    privacy: "隱私政策",
-    services: "服務",
-    experiences: "體驗與門票",
-    accommodations: "特色住宿",
-    transportation: "交通 / KTX",
-    socialMedia: "社群媒體",
-    langChanged: "語言已更改為繁體中文（台灣）。",
-    booked: "預訂已完成！",
-    copied: "連結已複製到剪貼簿！",
-    searchBtn: "搜尋",
-    won: "₩",
-    currencySymbol: "NT$",
-    exchangeRate: 40,
-    loginTitle: "登入",
-    loginSubtitle: "享受 Goldistrip 的各項優惠",
     googleLogin: "使用 Google 登入",
+    verificationCode: "驗證碼",
+    sendCode: "發送驗證碼",
+    verify: "驗證",
+    codeSent: "驗證碼已發送。",
+    invalidCode: "驗證碼無效或已過期。",
+    resendCode: "重新發送驗證碼",
+    passwordResetSent: "密碼重置郵件已發送。",
+    signUpSuccess: "註冊成功！",
+    remainingTime: "剩餘時間",
+    timeRemaining: "剩餘時間",
+    signupTitle: "註冊",
+    verifyTitle: "郵箱驗證",
+    findPasswordTitle: "找回密碼",
+    signupSubtitle: "成為 Goldistrip 的新會員",
+    verifySubtitle: "請輸入發送到您郵箱的驗證碼",
+    findPasswordSubtitle: "請輸入您註冊的郵箱地址",
+    backToLogin: "返回登入",
+    back: "返回",
+    sendResetEmail: "發送重置郵件",
     facebookLogin: "使用 Facebook 登入",
     appleLogin: "使用 Apple 登入",
     lineLogin: "使用 LINE 登入",
@@ -467,7 +772,50 @@ export const TRANSLATIONS: any = {
     priceHigh: "價格從高到低",
     allProducts: "全部商品",
     filter: "篩選",
-    sort: "排序"
+    sort: "排序",
+    verifyEmailBtn: "驗證郵箱",
+    nextBtn: "下一步",
+    signUpBtn: "註冊",
+    nicknameLabel: "暱稱",
+    firstNameLabel: "名字",
+    lastNameLabel: "姓氏",
+    countryLabel: "國家",
+    genderLabel: "性別",
+    languageLabel: "首選語言",
+    birthDateLabel: "出生日期 (YYYYMMDD)",
+    male: "男",
+    female: "女",
+    other: "其他",
+    selectCountry: "選擇國家",
+    selectGender: "選擇性別",
+    emailVerified: "郵箱驗證成功！請填寫您的詳細資訊。",
+    fillRequired: "請填寫所有必填欄位。",
+    fixErrors: "請在註冊前修正錯誤。",
+    signingUp: "正在註冊...",
+    weakPassword: "密碼太弱。",
+    emailInUse: "此郵箱已被使用。",
+    authNotEnabled: "Firebase 控制台中未啟用郵箱/密碼登入。",
+    passwordRequirement: "密碼必須至少為 8 個字元，且包含字母和數字。",
+    passwordsDoNotMatch: "密碼不匹配。",
+    birthDateRequirement: "出生日期必須為 8 位數字 (YYYYMMDD)。",
+    verifyError: "驗證驗證碼時出錯。",
+    signUpError: "建立帳戶時出錯。",
+    signupStep1Subtitle: "請輸入您的郵箱以接收驗證碼",
+    signupStep2Subtitle: "請提供您的詳細資訊以完成註冊",
+    confirmPasswordLabel: "確認密碼",
+    searchCountry: "搜尋國家...",
+    select: "選擇",
+    enterEmailPassword: "請輸入郵箱和密碼。",
+    invalidCredentials: "郵箱或密碼無效。請重試。",
+    tooManyRequests: "登入嘗試次數過多。請稍後再試或重置密碼。",
+    enterEmail: "請輸入郵箱。",
+    invalidEmail: "請輸入有效的電子郵件地址。",
+    emailAlreadyRegistered: "該郵箱已註冊。請登入。",
+    sendingVerification: "正在發送驗證碼...",
+    verificationSent: "驗證碼已發送到您的郵箱。",
+    verificationSendError: "發送驗證碼時出錯。請重試。",
+    passwordResetSent: "密碼重置郵件已發送。",
+    resetEmailError: "發送重置郵件時出錯。"
   },
   ZH_HK: {
     searchPlaceholder: "搜尋目的地、住宿、活動",
@@ -504,7 +852,32 @@ export const TRANSLATIONS: any = {
     exchangeRate: 165,
     loginTitle: "登入",
     loginSubtitle: "享受 Goldistrip 的各項優惠",
+    email: "電子郵件",
+    password: "密碼",
+    findPassword: "找回密碼",
+    signUp: "註冊",
+    or: "或",
+    selectLanguage: "選擇語言",
     googleLogin: "使用 Google 登入",
+    verificationCode: "驗證碼",
+    sendCode: "發送驗證碼",
+    verify: "驗證",
+    codeSent: "驗證碼已發送。",
+    invalidCode: "驗證碼無效或已過期。",
+    resendCode: "重新發送驗證碼",
+    passwordResetSent: "密碼重置郵件已發送。",
+    signUpSuccess: "註冊成功！",
+    remainingTime: "剩餘時間",
+    timeRemaining: "剩餘時間",
+    signupTitle: "註冊",
+    verifyTitle: "郵箱驗證",
+    findPasswordTitle: "找回密碼",
+    signupSubtitle: "成為 Goldistrip 的新會員",
+    verifySubtitle: "請輸入發送到您郵箱的驗證碼",
+    findPasswordSubtitle: "請輸入您註冊的郵箱地址",
+    backToLogin: "返回登入",
+    back: "返回",
+    sendResetEmail: "發送重置郵件",
     facebookLogin: "使用 Facebook 登入",
     appleLogin: "使用 Apple 登入",
     lineLogin: "使用 LINE 登入",
@@ -553,7 +926,50 @@ export const TRANSLATIONS: any = {
     priceHigh: "價格從高到低",
     allProducts: "全部商品",
     filter: "篩選",
-    sort: "排序"
+    sort: "排序",
+    verifyEmailBtn: "驗證郵箱",
+    nextBtn: "下一步",
+    signUpBtn: "註冊",
+    nicknameLabel: "暱稱",
+    firstNameLabel: "名字",
+    lastNameLabel: "姓氏",
+    countryLabel: "國家",
+    genderLabel: "性別",
+    languageLabel: "首選語言",
+    birthDateLabel: "出生日期 (YYYYMMDD)",
+    male: "男",
+    female: "女",
+    other: "其他",
+    selectCountry: "選擇國家",
+    selectGender: "選擇性別",
+    emailVerified: "郵箱驗證成功！請填寫您的詳細資訊。",
+    fillRequired: "請填寫所有必填欄位。",
+    fixErrors: "請在註冊前修正錯誤。",
+    signingUp: "正在註冊...",
+    weakPassword: "密碼太弱。",
+    emailInUse: "此郵箱已被使用。",
+    authNotEnabled: "Firebase 控制台中未啟用郵箱/密碼登入。",
+    passwordRequirement: "密碼必須至少為 8 個字元，且包含字母和數字。",
+    passwordsDoNotMatch: "密碼不匹配。",
+    birthDateRequirement: "出生日期必須為 8 位數字 (YYYYMMDD)。",
+    verifyError: "驗證驗證碼時出錯。",
+    signUpError: "建立帳戶時出錯。",
+    signupStep1Subtitle: "請輸入您的郵箱以接收驗證碼",
+    signupStep2Subtitle: "請提供您的詳細資訊以完成註冊",
+    confirmPasswordLabel: "確認密碼",
+    searchCountry: "搜尋國家...",
+    select: "選擇",
+    enterEmailPassword: "請輸入郵箱和密碼。",
+    invalidCredentials: "郵箱或密碼無效。請重試。",
+    tooManyRequests: "登入嘗試次數過多。請稍後再試或重置密碼。",
+    enterEmail: "請輸入郵箱。",
+    invalidEmail: "請輸入有效的電子郵件地址。",
+    emailAlreadyRegistered: "該郵箱已註冊。請登入。",
+    sendingVerification: "正在發送驗證碼...",
+    verificationSent: "驗證碼已發送到您的郵箱。",
+    verificationSendError: "發送驗證碼時出錯。請重試。",
+    passwordResetSent: "密碼重置郵件已發送。",
+    resetEmailError: "發送重置郵件時出錯。"
   }
 };
 
@@ -846,8 +1262,33 @@ export default function App() {
   // Auth State
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'verify' | 'register' | 'findPassword'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [country, setCountry] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
+  const [preferredLanguage, setPreferredLanguage] = useState('KO');
+  const [birthDate, setBirthDate] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [birthDateError, setBirthDateError] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [inputCode, setInputCode] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [timer, setTimer] = useState(600); // 10 minutes in seconds
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
+
+  // Booking State
+  const [adultCount, setAdultCount] = useState(1);
+  const [childCount, setChildCount] = useState(0);
+  const [selectedDate, setSelectedDate] = useState('');
   
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -857,6 +1298,7 @@ export default function App() {
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [products, setProducts] = useState<any[]>(MOCK_PRODUCTS);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Hero Slider State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -864,6 +1306,23 @@ export default function App() {
     "https://i.postimg.cc/qqtJ8Tg2/zero-take-0FRGi-Jd-ZY8-unsplash.jpg",
     "https://i.postimg.cc/CLqM5S3L/bundo-kim-p-D5pb-QG5TE-unsplash.jpg"
   ];
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  useEffect(() => {
+    if (!isLoginModalOpen) {
+      setEmailError("");
+      setPasswordError("");
+      setConfirmPasswordError("");
+      setBirthDateError("");
+      setInputCode("");
+    }
+  }, [isLoginModalOpen]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -973,16 +1432,343 @@ export default function App() {
   };
 
   // 로그인 처리
+  // Timer for verification code
+  useEffect(() => {
+    let interval: any;
+    if (authMode === 'verify' && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      setToastMessage(t('invalidCode'));
+      setAuthMode('signup');
+    }
+    return () => clearInterval(interval);
+  }, [authMode, timer]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleEmailSignUp = async () => {
+    setEmailError("");
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setEmailError(t('enterEmail'));
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setEmailError(t('invalidEmail'));
+      return;
+    }
+
+    // Check if email already exists
+    try {
+      const emailDoc = await getDoc(doc(db, 'registered_emails', trimmedEmail));
+      if (emailDoc.exists()) {
+        setEmailError(t('emailAlreadyRegistered'));
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking existing email:", error);
+    }
+    
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setVerificationCode(code);
+    
+    try {
+      setAuthLoading(true);
+      setToastMessage(t('sendingVerification'));
+      // Store code in Firestore
+      const path = `verification_codes/${trimmedEmail}`;
+      try {
+        await setDoc(doc(db, 'verification_codes', trimmedEmail), {
+          email: trimmedEmail,
+          code,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          createdAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+
+      // Send email via server
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setAuthMode('verify');
+        setTimer(600);
+        setToastMessage(t('codeSent'));
+      } else {
+        if (result.code === 'MISSING_CREDENTIALS') {
+          console.warn("EMAIL_SERVICE_USER or EMAIL_SERVICE_PASS is missing. Code is:", code);
+          setAuthMode('verify');
+          setTimer(600);
+          setToastMessage("Dev Mode: Email not sent (missing secrets). Code logged to console.");
+        } else if (result.code === 'APP_PASSWORD_REQUIRED') {
+          setToastMessage("Gmail App Password required. Please check instructions in console.");
+          console.error("Gmail App Password required. Go to https://myaccount.google.com/apppasswords to generate a 16-character password and use it as EMAIL_SERVICE_PASS.");
+        } else {
+          throw new Error(result.error || "Failed to send email");
+        }
+      }
+    } catch (error: any) {
+      console.error("SignUp Error:", error);
+      setToastMessage(error.message || "Error sending verification code.");
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    try {
+      const path = `verification_codes/${trimmedEmail}`;
+      let docSnap;
+      try {
+        const docRef = doc(db, 'verification_codes', trimmedEmail);
+        docSnap = await getDoc(docRef);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, path);
+      }
+      
+      if (docSnap && docSnap.exists()) {
+        const data = docSnap.data();
+        const now = new Date();
+        const expiresAt = new Date(data.expiresAt);
+        
+        if (data.code === inputCode && now < expiresAt) {
+          // Success! Go to registration step
+          setAuthMode('register');
+          setToastMessage(t('emailVerified'));
+        } else {
+          setToastMessage(t('invalidCode'));
+        }
+      } else {
+        setToastMessage(t('invalidCode'));
+      }
+    } catch (error: any) {
+      console.error("Verify Error:", error);
+      setToastMessage(t('verifyError'));
+    }
+  };
+
+  useEffect(() => {
+    if (authMode === 'register' || authMode === 'signup') {
+      setEmailError("");
+    }
+  }, [email, authMode]);
+
+  useEffect(() => {
+    if (authMode === 'register') {
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+      if (password && !passwordRegex.test(password)) {
+        setPasswordError(t('passwordRequirement'));
+      } else {
+        setPasswordError("");
+      }
+    }
+  }, [password, authMode]);
+
+  useEffect(() => {
+    if (authMode === 'register') {
+      if (confirmPassword && password !== confirmPassword) {
+        setConfirmPasswordError(t('passwordsDoNotMatch'));
+      } else {
+        setConfirmPasswordError("");
+      }
+    }
+  }, [confirmPassword, password, authMode]);
+
+  useEffect(() => {
+    if (authMode === 'register') {
+      if (birthDate && birthDate.length !== 8) {
+        setBirthDateError(t('birthDateRequirement'));
+      } else {
+        setBirthDateError("");
+      }
+    }
+  }, [birthDate, authMode]);
+
+  const handleFinalSignUp = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password || !confirmPassword || !nickname || !country || !gender || !preferredLanguage || !birthDate || !firstName || !lastName) {
+      setToastMessage(t('fillRequired'));
+      return;
+    }
+
+    if (emailError || passwordError || confirmPasswordError || birthDateError) {
+      setToastMessage(t('fixErrors'));
+      return;
+    }
+
+    setToastMessage(t('signingUp'));
+
+    // Password validation: At least 8 characters, letters and numbers
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setToastMessage(t('passwordRequirement'));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setToastMessage(t('passwordsDoNotMatch'));
+      return;
+    }
+
+    try {
+      // Create user in Auth
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      } catch (authError: any) {
+        console.error("Auth Error details:", { code: authError.code, message: authError.message });
+        if (authError.code === 'auth/operation-not-allowed') {
+          setToastMessage(t('authNotEnabled'));
+          return;
+        }
+        if (authError.code === 'auth/email-already-in-use') {
+          setToastMessage(t('emailInUse'));
+          return;
+        }
+        if (authError.code === 'auth/weak-password') {
+          setToastMessage(t('weakPassword'));
+          return;
+        }
+        throw authError;
+      }
+      const newUser = userCredential.user;
+      
+      // Create profile in Firestore
+      const userPath = `users/${newUser.uid}`;
+      try {
+        await setDoc(doc(db, 'users', newUser.uid), {
+          uid: newUser.uid,
+          email: newUser.email,
+          displayName: nickname,
+          nickname,
+          firstName,
+          lastName,
+          country,
+          gender,
+          preferredLanguage,
+          birthDate,
+          photoURL: `https://ui-avatars.com/api/?name=${nickname}&background=random`,
+          role: 'user',
+          createdAt: serverTimestamp()
+        });
+
+        // Register email for uniqueness check
+        await setDoc(doc(db, 'registered_emails', trimmedEmail), {
+          uid: newUser.uid,
+          registeredAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, userPath);
+      }
+      
+      // Cleanup verification code
+      try {
+        await deleteDoc(doc(db, 'verification_codes', trimmedEmail));
+      } catch (error) {
+        console.warn("Failed to delete verification code:", error);
+      }
+      
+      setIsLoginModalOpen(false);
+      setToastMessage(t('signUpSuccess'));
+    } catch (error: any) {
+      console.error("Final SignUp Error:", error);
+      setToastMessage(error.message || t('signUpError'));
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) {
+      setToastMessage(t('enterEmailPassword'));
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      setIsLoginModalOpen(false);
+      setToastMessage(t('loginSuccess'));
+    } catch (error: any) {
+      console.error("Login Error:", error);
+      
+      const errorCode = error.code;
+      const errorMessage = error.message || "";
+      
+      if (errorCode === 'auth/operation-not-allowed') {
+        setToastMessage(t('authNotEnabled'));
+        return;
+      }
+      
+      if (errorCode === 'auth/invalid-credential' || 
+          errorCode === 'auth/user-not-found' || 
+          errorCode === 'auth/wrong-password' ||
+          errorMessage.includes('auth/invalid-credential') ||
+          errorMessage.includes('invalid-credential')) {
+        setToastMessage(t('invalidCredentials'));
+        return;
+      }
+
+      if (errorCode === 'auth/too-many-requests') {
+        setToastMessage(t('tooManyRequests'));
+        return;
+      }
+
+      setToastMessage(errorMessage || t('loginError'));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleFindPassword = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setToastMessage(t('enterEmail'));
+      return;
+    }
+    try {
+      setAuthLoading(true);
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      setToastMessage(t('passwordResetSent'));
+      setAuthMode('login');
+    } catch (error: any) {
+      console.error("Reset Error:", error);
+      if (error.code === 'auth/operation-not-allowed') {
+        setToastMessage(t('authNotEnabled'));
+        return;
+      }
+      setToastMessage(error.message || t('resetEmailError'));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
   const handleSocialLogin = async (provider: any) => {
     try {
       await signInWithPopup(auth, provider);
       setIsLoginModalOpen(false);
       setToastMessage(t('loginSuccess'));
-      setTimeout(() => setToastMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
+      if (error.code === 'auth/operation-not-allowed') {
+        setToastMessage("This login provider is not enabled in Firebase Console.");
+        console.error(`Firebase Auth Error: Provider is disabled. Go to https://console.firebase.google.com/project/gen-lang-client-0392441704/authentication/providers and enable the provider.`);
+        return;
+      }
       setToastMessage(t('loginError'));
-      setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
@@ -991,7 +1777,6 @@ export default function App() {
       await signOut(auth);
       setIsUserMenuOpen(false);
       setToastMessage(t('logoutSuccess'));
-      setTimeout(() => setToastMessage(''), 3000);
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -1017,7 +1802,6 @@ export default function App() {
       }];
     });
     setToastMessage(t('addedToCart'));
-    setTimeout(() => setToastMessage(''), 3000);
   };
 
   const updateCartQuantity = (id: number, delta: number) => {
@@ -1040,7 +1824,6 @@ export default function App() {
     if (!user) {
       setIsLoginModalOpen(true);
       setToastMessage(selectedLang === 'KO' ? '로그인 후 이용 가능합니다.' : 'Please login to use this feature.');
-      setTimeout(() => setToastMessage(''), 3000);
       return;
     }
     
@@ -1098,24 +1881,40 @@ export default function App() {
     const bookingProduct = product || selectedProduct;
     if (!bookingProduct) return;
 
+    if (!selectedDate) {
+      setToastMessage(selectedLang === 'KO' ? '방문하실 날짜를 선택해주세요.' : 'Please select a visit date.');
+      return;
+    }
+
+    const childPrice = Math.floor(bookingProduct.price * 0.8); // 20% discount for children
+    const totalPrice = (bookingProduct.price * adultCount) + (childPrice * childCount);
     const bookingId = `BK${Date.now()}`;
+
     try {
       const bookingData = {
         id: bookingId,
         userId: user.uid,
         userEmail: user.email,
+        userName: user.displayName,
         productId: bookingProduct.id.toString(),
         productTitle: bookingProduct.title[selectedLang],
-        amount: bookingProduct.price,
+        productImage: bookingProduct.image,
+        amount: totalPrice,
+        adultCount,
+        childCount,
+        bookingDate: selectedDate,
         status: 'pending',
-        bookingDate: new Date().toISOString().split('T')[0],
         createdAt: new Date().toISOString(),
       };
 
       await setDoc(doc(db, 'bookings', bookingId), bookingData);
       
-      setToastMessage(`${bookingProduct.title[selectedLang]} ${t('booked')}`);
-      setTimeout(() => setToastMessage(''), 3000);
+      setToastMessage(t('bookingSuccess'));
+      
+      // Reset booking state
+      setAdultCount(1);
+      setChildCount(0);
+      setSelectedDate('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `bookings/${bookingId}`);
     }
@@ -1132,7 +1931,6 @@ export default function App() {
     } else {
       navigator.clipboard.writeText(window.location.href);
       setToastMessage(t('copied'));
-      setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
@@ -1170,7 +1968,7 @@ export default function App() {
 
       {/* 알림(Toast) 메시지 */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-xl z-50 flex items-center space-x-2 animate-bounce">
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-xl z-[9999] flex items-center space-x-2 animate-bounce">
           <ShoppingCart size={18} />
           <span>{toastMessage}</span>
         </div>
@@ -1225,7 +2023,6 @@ export default function App() {
                           setSelectedLang(lang);
                           setIsLangOpen(false);
                           setToastMessage(TRANSLATIONS[lang].langChanged);
-                          setTimeout(() => setToastMessage(''), 2000);
                         }}
                         className={`w-full px-4 py-2 text-left text-sm hover:bg-yellow-50 transition-colors ${selectedLang === lang ? 'text-[#FFB602] font-bold' : 'text-gray-600'}`}
                       >
@@ -2079,7 +2876,6 @@ export default function App() {
                         const addr = selectedProduct.address?.[selectedLang] || `${selectedProduct.location[selectedLang]} 어딘가`;
                         navigator.clipboard.writeText(addr);
                         setToastMessage(t('addressCopied'));
-                        setTimeout(() => setToastMessage(''), 3000);
                       }}
                       className="flex items-center space-x-2 text-sm font-bold text-[#FFB602] hover:underline"
                     >
@@ -2100,24 +2896,66 @@ export default function App() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('date')}</label>
-                      <button className="w-full flex justify-between items-center border border-gray-200 rounded-2xl p-4 hover:border-[#FFB602] transition-all bg-white text-left group">
-                        <span className="flex items-center text-gray-700 font-medium">
-                          <Calendar size={18} className="mr-3 text-gray-400 group-hover:text-[#FFB602]" />
-                          {t('selectDatePlaceholder')}
-                        </span>
-                        <ChevronDown size={18} className="text-gray-400" />
-                      </button>
+                      <div className="relative">
+                        <input 
+                          type="date" 
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="w-full border border-gray-200 rounded-2xl p-4 focus:outline-none focus:border-[#FFB602] transition-all bg-white text-gray-700 font-medium appearance-none"
+                          min={new Date().toISOString().split('T')[0]}
+                        />
+                        <Calendar size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('selectOption')}</label>
-                      <button className="w-full flex justify-between items-center border border-gray-200 rounded-2xl p-4 hover:border-[#FFB602] transition-all bg-white text-left group">
-                        <span className="flex items-center text-gray-700 font-medium">
-                          <Plus size={18} className="mr-3 text-gray-400 group-hover:text-[#FFB602]" />
-                          {t('selectOption')}
-                        </span>
-                        <ChevronDown size={18} className="text-gray-400" />
-                      </button>
+                    <div className="space-y-3">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{selectedLang === 'KO' ? '인원 선택' : 'Number of People'}</label>
+                      
+                      {/* Adult */}
+                      <div className="flex justify-between items-center border border-gray-200 rounded-2xl p-4 bg-white">
+                        <div>
+                          <p className="text-sm font-bold text-gray-700">{selectedLang === 'KO' ? '성인' : 'Adult'}</p>
+                          <p className="text-xs text-gray-400">{formatPrice(selectedProduct.price)}</p>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          <button 
+                            onClick={() => setAdultCount(Math.max(1, adultCount - 1))}
+                            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-[#FFB602] hover:text-[#FFB602]"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span className="font-bold text-gray-700 w-4 text-center">{adultCount}</span>
+                          <button 
+                            onClick={() => setAdultCount(adultCount + 1)}
+                            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-[#FFB602] hover:text-[#FFB602]"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Child */}
+                      <div className="flex justify-between items-center border border-gray-200 rounded-2xl p-4 bg-white">
+                        <div>
+                          <p className="text-sm font-bold text-gray-700">{selectedLang === 'KO' ? '아동' : 'Child'}</p>
+                          <p className="text-xs text-gray-400">{formatPrice(Math.floor(selectedProduct.price * 0.8))}</p>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          <button 
+                            onClick={() => setChildCount(Math.max(0, childCount - 1))}
+                            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-[#FFB602] hover:text-[#FFB602]"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span className="font-bold text-gray-700 w-4 text-center">{childCount}</span>
+                          <button 
+                            onClick={() => setChildCount(childCount + 1)}
+                            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-[#FFB602] hover:text-[#FFB602]"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2125,13 +2963,8 @@ export default function App() {
                     <div className="flex justify-between items-end mb-6">
                       <span className="text-gray-500 font-bold">{t('totalPrice')}</span>
                       <div className="text-right">
-                        {selectedProduct.originalPrice && selectedProduct.originalPrice > selectedProduct.price && (
-                          <p className="text-xs text-gray-400 line-through mb-1">
-                            {formatPrice(selectedProduct.originalPrice)}
-                          </p>
-                        )}
                         <p className="text-3xl font-black text-[#FFB602]">
-                          {formatPrice(selectedProduct.price)}
+                          {formatPrice((selectedProduct.price * adultCount) + (Math.floor(selectedProduct.price * 0.8) * childCount))}
                         </p>
                       </div>
                     </div>
@@ -2439,10 +3272,16 @@ export default function App() {
 
       {/* 로그인 모달 */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300 my-8">
             <div className="p-6 flex justify-between items-center border-b border-gray-50">
-              <h3 className="text-xl font-bold text-gray-900">{t('loginTitle')}</h3>
+              <h3 className="text-xl font-bold text-gray-900">
+                {authMode === 'login' && t('loginTitle')}
+                {authMode === 'signup' && t('signupTitle')}
+                {authMode === 'verify' && t('verifyTitle')}
+                {authMode === 'register' && t('signupTitle')}
+                {authMode === 'findPassword' && t('findPasswordTitle')}
+              </h3>
               <button 
                 onClick={() => setIsLoginModalOpen(false)}
                 className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
@@ -2459,49 +3298,362 @@ export default function App() {
                   className="h-10 mx-auto mb-4"
                   referrerPolicy="no-referrer"
                 />
-                <p className="text-gray-500">{t('loginSubtitle')}</p>
+                <p className="text-gray-500">
+                  {authMode === 'login' && t('loginSubtitle')}
+                  {authMode === 'signup' && t('signupStep1Subtitle')}
+                  {authMode === 'verify' && t('verifySubtitle')}
+                  {authMode === 'register' && t('signupStep2Subtitle')}
+                  {authMode === 'findPassword' && t('findPasswordSubtitle')}
+                </p>
               </div>
 
-              <div className="space-y-3">
-                {/* Google Login */}
-                <button 
-                  onClick={() => handleSocialLogin(googleProvider)}
-                  className="w-full flex items-center justify-center space-x-3 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
-                >
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                  <span>{t('googleLogin')}</span>
-                </button>
+              <div className="space-y-4">
+                {/* Email Input (Login, Signup, FindPassword) */}
+                {(authMode === 'login' || authMode === 'signup' || authMode === 'findPassword') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="example@email.com"
+                      className={`w-full px-4 py-3.5 bg-gray-50 border ${emailError ? 'border-red-500' : 'border-gray-100'} rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all`}
+                    />
+                    {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
+                  </div>
+                )}
 
-                {/* Apple Login */}
-                <button 
-                  onClick={() => handleSocialLogin(appleProvider)}
-                  className="w-full flex items-center justify-center space-x-3 py-3.5 bg-black text-white rounded-xl hover:bg-gray-900 transition-all font-medium"
-                >
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" alt="Apple" className="w-5 h-5 invert" />
-                  <span>{t('appleLogin')}</span>
-                </button>
+                {/* Password Input (Login only) */}
+                {authMode === 'login' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('password')}</label>
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all"
+                    />
+                  </div>
+                )}
 
-                {/* Facebook Login */}
-                <button 
-                  onClick={() => handleSocialLogin(facebookProvider)}
-                  className="w-full flex items-center justify-center space-x-3 py-3.5 bg-[#1877F2] text-white rounded-xl hover:bg-[#166fe5] transition-all font-medium"
-                >
-                  <Facebook size={20} fill="white" />
-                  <span>{t('facebookLogin')}</span>
-                </button>
+                {/* Verification Code Input */}
+                {authMode === 'verify' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('verificationCode')}</label>
+                    <input 
+                      type="text" 
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value)}
+                      placeholder="123456"
+                      maxLength={6}
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all text-center text-2xl tracking-widest"
+                    />
+                    <p className="text-center mt-2 text-sm text-gray-500">
+                      {t('timeRemaining')}: {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}
+                    </p>
+                    {verificationCode && (
+                      <p className="text-center mt-4 text-xs text-amber-600 font-mono bg-amber-50 py-2 rounded-lg border border-amber-100">
+                        Dev Hint: {verificationCode}
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                {/* Line Login (Placeholder for now as it requires more complex setup) */}
-                <button 
-                  onClick={() => setToastMessage("LINE Login requires additional configuration.")}
-                  className="w-full flex items-center justify-center space-x-3 py-3.5 bg-[#00B900] text-white rounded-xl hover:bg-[#00a300] transition-all font-medium"
-                >
-                  <MessageCircle size={20} fill="white" />
-                  <span>{t('lineLogin')}</span>
-                </button>
+                {/* Registration Fields */}
+                {authMode === 'register' && (
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('firstNameLabel')}</label>
+                        <input 
+                          type="text" 
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="John"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('lastNameLabel')}</label>
+                        <input 
+                          type="text" 
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Doe"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('nicknameLabel')}</label>
+                      <input 
+                        type="text" 
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                        placeholder="CoolTraveler"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('password')}</label>
+                      <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`w-full px-4 py-3 bg-gray-50 border ${passwordError ? 'border-red-500' : 'border-gray-100'} rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all`}
+                      />
+                      {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('confirmPasswordLabel')}</label>
+                      <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`w-full px-4 py-3 bg-gray-50 border ${confirmPasswordError ? 'border-red-500' : 'border-gray-100'} rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all`}
+                      />
+                      {confirmPasswordError && <p className="text-xs text-red-500 mt-1">{confirmPasswordError}</p>}
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('countryLabel')}</label>
+                      <div 
+                        onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl cursor-pointer flex justify-between items-center"
+                      >
+                        <span className={country ? 'text-gray-900' : 'text-gray-400'}>
+                          {country || t('selectCountry')}
+                        </span>
+                        <ChevronDown size={18} className={`transition-transform ${isCountryDropdownOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                      
+                      {isCountryDropdownOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden">
+                          <div className="p-2 border-b border-gray-50">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                              <input 
+                                type="text"
+                                value={countrySearch}
+                                onChange={(e) => setCountrySearch(e.target.value)}
+                                placeholder={t('searchCountry')}
+                                className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-lg text-sm focus:ring-0 outline-none"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {COUNTRIES.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase())).map(c => (
+                              <div 
+                                key={c}
+                                onClick={() => {
+                                  setCountry(c);
+                                  setIsCountryDropdownOpen(false);
+                                }}
+                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-700"
+                              >
+                                {c}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('genderLabel')}</label>
+                        <select 
+                          value={gender}
+                          onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'other')}
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all appearance-none"
+                        >
+                          <option value="">{t('select')}</option>
+                          <option value="male">{t('male')}</option>
+                          <option value="female">{t('female')}</option>
+                          <option value="other">{t('other')}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('languageLabel')}</label>
+                        <select 
+                          value={preferredLanguage}
+                          onChange={(e) => setPreferredLanguage(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all appearance-none"
+                        >
+                          <option value="">{t('select')}</option>
+                          {LANGUAGES.map(lang => (
+                            <option key={lang.code} value={lang.code}>{lang.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('birthDateLabel')}</label>
+                      <input 
+                        type="text" 
+                        value={birthDate}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
+                          setBirthDate(val);
+                        }}
+                        placeholder="YYYYMMDD"
+                        className={`w-full px-4 py-3 bg-gray-50 border ${birthDateError ? 'border-red-500' : 'border-gray-100'} rounded-xl focus:ring-2 focus:ring-[#FFB602]/20 focus:border-[#FFB602] outline-none transition-all`}
+                      />
+                      {birthDateError && <p className="text-xs text-red-500 mt-1">{birthDateError}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                {authMode === 'signup' && (
+                  <p className="text-xs text-gray-400 text-center mb-2">
+                    Gmail App Password required for email sending. 
+                    <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" className="text-[#FFB602] hover:underline ml-1">Learn more</a>
+                  </p>
+                )}
+                {authMode === 'login' && (
+                  <>
+                    <button 
+                      onClick={handleEmailLogin}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('login')}
+                    </button>
+                    <button 
+                      onClick={() => setAuthMode('signup')}
+                      className="w-full py-4 bg-white text-[#FFB602] border-2 border-[#FFB602] rounded-xl hover:bg-[#fff9eb] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('signUp')}
+                    </button>
+                    <div className="text-center">
+                      <button 
+                        onClick={() => setAuthMode('findPassword')}
+                        className="text-sm text-gray-400 hover:text-[#FFB602] transition-colors font-medium"
+                      >
+                        {t('findPassword')}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {authMode === 'signup' && (
+                  <>
+                    <button 
+                      onClick={handleEmailSignUp}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('verifyEmailBtn')}
+                    </button>
+                    <button 
+                      onClick={() => setAuthMode('login')}
+                      className="w-full py-4 bg-white text-[#FFB602] border-2 border-[#FFB602] rounded-xl hover:bg-[#fff9eb] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('backToLogin')}
+                    </button>
+                  </>
+                )}
+
+                {authMode === 'verify' && (
+                  <>
+                    <button 
+                      onClick={handleVerifyCode}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('nextBtn')}
+                    </button>
+                    <button 
+                      onClick={() => setAuthMode('signup')}
+                      className="w-full py-4 bg-white text-[#FFB602] border-2 border-[#FFB602] rounded-xl hover:bg-[#fff9eb] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('back')}
+                    </button>
+                  </>
+                )}
+
+                {authMode === 'register' && (
+                  <>
+                    <button 
+                      onClick={handleFinalSignUp}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('signUpBtn')}
+                    </button>
+                    <button 
+                      onClick={() => setAuthMode('signup')}
+                      className="w-full py-4 bg-white text-[#FFB602] border-2 border-[#FFB602] rounded-xl hover:bg-[#fff9eb] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('back')}
+                    </button>
+                  </>
+                )}
+
+                {authMode === 'findPassword' && (
+                  <>
+                    <button 
+                      onClick={handleFindPassword}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('sendResetEmail')}
+                    </button>
+                    <button 
+                      onClick={() => setAuthMode('login')}
+                      className="w-full py-4 bg-white text-[#FFB602] border-2 border-[#FFB602] rounded-xl hover:bg-[#fff9eb] transition-all font-bold shadow-sm text-lg"
+                    >
+                      {t('backToLogin')}
+                    </button>
+                  </>
+                )}
+
+                {/* OR Separator */}
+                {(authMode === 'login' || authMode === 'signup') && (
+                  <>
+                    <div className="flex items-center space-x-4 py-2">
+                      <div className="flex-1 h-px bg-gray-100"></div>
+                      <span className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">or</span>
+                      <div className="flex-1 h-px bg-gray-100"></div>
+                    </div>
+
+                    {/* Google Login */}
+                    <button 
+                      onClick={() => handleSocialLogin(googleProvider)}
+                      className="w-full flex items-center justify-center space-x-3 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
+                    >
+                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                      <span>{t('googleLogin')}</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Language Selection */}
+                <div className="pt-6 border-t border-gray-50">
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {Object.keys(TRANSLATIONS).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setSelectedLang(lang)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          selectedLang === lang 
+                            ? 'bg-[#FFB602] text-white' 
+                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="p-6 bg-gray-50 text-center text-xs text-gray-400">
+            <div className="p-6 bg-gray-50 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
               {t('terms')} | {t('privacy')}
             </div>
           </div>

@@ -133,6 +133,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
   });
   const [formTab, setFormTab] = useState('KO');
 
+  const handleUpdateBookingStatus = async (bookingId: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, 'bookings', bookingId), { status: newStatus });
+      setNotification({ message: '예약 상태가 업데이트되었습니다.', type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+    } catch (error) {
+      console.error("Error updating booking status:", error);
+      setNotification({ message: '상태 업데이트 중 오류가 발생했습니다.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    }
+  };
+
   const handleTranslateAll = async () => {
     if (isTranslating) return;
     
@@ -924,24 +936,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
             <tbody className="divide-y divide-gray-50">
               {bookings?.map((booking) => (
                 <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-4 text-sm font-mono">{booking.id.slice(0, 10)}</td>
+                  <td className="p-4 text-sm font-mono">
+                    <div>{booking.id.slice(0, 10)}</div>
+                    <div className="text-[10px] text-gray-400">{booking.bookingDate || '-'}</div>
+                  </td>
                   <td className="p-4">
                     <div className="text-sm font-medium">{booking.userEmail}</div>
                     <div className="text-xs text-gray-400">{safeFormatDate(booking.createdAt, 'yyyy-MM-dd HH:mm')}</div>
                   </td>
                   <td className="p-4">
-                    <div className="text-sm">{booking.productTitle}</div>
-                    <div className="text-xs font-bold text-yellow-600">{formatPrice(booking.amount || 0)}</div>
+                    <div className="text-sm font-bold">{booking.productTitle}</div>
+                    <div className="text-xs text-gray-500">
+                      {booking.adultCount > 0 && `성인 ${booking.adultCount} `}
+                      {booking.childCount > 0 && `아동 ${booking.childCount}`}
+                    </div>
+                    <div className="text-xs font-bold text-[#FFB602] mt-1">{formatPrice(booking.amount || 0)}</div>
                   </td>
                   <td className="p-4">
                     <select 
-                      className={`text-[10px] font-bold uppercase rounded-lg border-none focus:ring-0 cursor-pointer ${
+                      className={`text-[10px] font-bold uppercase rounded-lg border-none focus:ring-0 cursor-pointer p-1 ${
                         booking.status === 'confirmed' ? 'bg-green-100 text-green-700' : 
                         booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 
                         'bg-red-100 text-red-700'
                       }`}
                       value={booking.status}
-                      onChange={() => {}}
+                      onChange={(e) => handleUpdateBookingStatus(booking.id, e.target.value)}
                     >
                       <option value="pending">대기</option>
                       <option value="confirmed">확정</option>
