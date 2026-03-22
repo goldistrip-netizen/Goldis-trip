@@ -10,7 +10,7 @@ import {
   Train, Bus, Utensils, Bed, ChevronDown, Share2,
   Instagram, Facebook, MessageCircle, Globe, X, LogOut,
   CreditCard, Settings, ChevronRight, Briefcase, UserPlus,
-  CheckCircle2, Info, Map as MapIcon, Copy, Plus, DollarSign, Filter, Minus
+  CheckCircle2, Info, Map as MapIcon, Copy, Plus, DollarSign, Filter, Minus, Loader2
 } from 'lucide-react';
 import { auth, db, googleProvider, facebookProvider, appleProvider, handleFirestoreError, OperationType } from './firebase';
 import { 
@@ -20,6 +20,12 @@ import {
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, onSnapshot, query, collection, orderBy, limit, where, getDocs } from 'firebase/firestore';
 import { AdminDashboard } from './components/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  format, addMonths, subMonths, startOfMonth, endOfMonth, 
+  startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, 
+  isSameDay, isToday, addDays, isBefore, startOfToday, getDay
+} from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 interface UserProfile {
   uid: string;
@@ -532,8 +538,6 @@ export const TRANSLATIONS: any = {
     birthDateRequirement: "生年月日は8桁の数字（YYYYMMDD）である必要があります。",
     verifyError: "コードの確認中にエラーが発生しました。",
     signUpError: "アカウント作成中にエラーが発生しました。",
-    signupStep1Subtitle: "認証コードを受け取るメールアドレスを入力してください",
-    signupStep2Subtitle: "会員登録を完了するために詳細情報を入力してください",
     confirmPasswordLabel: "パスワード再入力",
     searchCountry: "国を検索...",
     select: "選択",
@@ -545,9 +549,7 @@ export const TRANSLATIONS: any = {
     emailAlreadyRegistered: "このメールアドレスは既に登録されています。ログインしてください。",
     sendingVerification: "認証コードを送信中...",
     verificationSent: "メールに認証コードを送信しました。",
-    verificationSendError: "認証コードの送信中にエラーが発生しました。もう一度お試しください。",
-    passwordResetSent: "パスワード再設定メールを送信しました。",
-    resetEmailError: "再設定メールの送信中にエラーが発生しました。"
+    verificationSendError: "認証コードの送信中にエラーが発生しました。もう一度お試しください。"
   },
   ZH_CN: {
     searchPlaceholder: "搜索目的地、住宿、活动",
@@ -699,9 +701,7 @@ export const TRANSLATIONS: any = {
     emailAlreadyRegistered: "该邮箱已注册。请登录。",
     sendingVerification: "正在发送验证码...",
     verificationSent: "验证码已发送到您的邮箱。",
-    verificationSendError: "发送验证码时出错。请重试。",
-    passwordResetSent: "密码重置邮件已发送。",
-    resetEmailError: "发送重置邮件时出错。"
+    verificationSendError: "发送验证码时出错。请重试。"
   },
   ZH_TW: {
     googleLogin: "使用 Google 登入",
@@ -813,9 +813,7 @@ export const TRANSLATIONS: any = {
     emailAlreadyRegistered: "該郵箱已註冊。請登入。",
     sendingVerification: "正在發送驗證碼...",
     verificationSent: "驗證碼已發送到您的郵箱。",
-    verificationSendError: "發送驗證碼時出錯。請重試。",
-    passwordResetSent: "密碼重置郵件已發送。",
-    resetEmailError: "發送重置郵件時出錯。"
+    verificationSendError: "發送驗證碼時出錯。請重試。"
   },
   ZH_HK: {
     searchPlaceholder: "搜尋目的地、住宿、活動",
@@ -967,9 +965,7 @@ export const TRANSLATIONS: any = {
     emailAlreadyRegistered: "該郵箱已註冊。請登入。",
     sendingVerification: "正在發送驗證碼...",
     verificationSent: "驗證碼已發送到您的郵箱。",
-    verificationSendError: "發送驗證碼時出錯。請重試。",
-    passwordResetSent: "密碼重置郵件已發送。",
-    resetEmailError: "發送重置郵件時出錯。"
+    verificationSendError: "發送驗證碼時出錯。請重試。"
   }
 };
 
@@ -1249,6 +1245,166 @@ const MOCK_PRODUCTS = [
 
 // --- 컴포넌트 ---
 
+// --- Large Calendar Component ---
+const LargeCalendar = ({ isOpen, onClose, selectedDate, onSelect, disabledWeekdays, selectedLang }: any) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  if (!isOpen) return null;
+
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart);
+  const endDate = endOfWeek(monthEnd);
+
+  const dateFormat = "MMMM yyyy";
+  const rows = [];
+  let days = [];
+  let day = startDate;
+  let formattedDate = "";
+
+  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+
+  const onDateClick = (d: Date) => {
+    const dayOfWeek = getDay(d);
+    if (disabledWeekdays?.includes(dayOfWeek)) return;
+    if (isBefore(d, startOfToday())) return;
+    onSelect(format(d, 'yyyy-MM-dd'));
+    onClose();
+  };
+
+  const renderHeader = () => {
+    return (
+      <div className="flex items-center justify-between mb-8 px-2">
+        <h2 className="text-2xl font-black text-gray-900">
+          {format(currentMonth, selectedLang === 'KO' ? 'yyyy년 M월' : 'MMMM yyyy', { locale: selectedLang === 'KO' ? ko : undefined })}
+        </h2>
+        <div className="flex space-x-2">
+          <button 
+            onClick={prevMonth}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button 
+            onClick={nextMonth}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <ChevronRight size={24} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDays = () => {
+    const days = [];
+    const dateNames = selectedLang === 'KO' ? ['일', '월', '화', '수', '목', '금', '토'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (let i = 0; i < 7; i++) {
+      days.push(
+        <div key={i} className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest py-4">
+          {dateNames[i]}
+        </div>
+      );
+    }
+    return <div className="grid grid-cols-7 mb-2">{days}</div>;
+  };
+
+  const renderCells = () => {
+    const rows = [];
+    let days = [];
+    let day = startDate;
+    let formattedDate = "";
+
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        formattedDate = format(day, "d");
+        const cloneDay = day;
+        const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
+        const isCurrentMonth = isSameMonth(day, monthStart);
+        const isPast = isBefore(day, startOfToday());
+        const isDisabledDay = disabledWeekdays?.includes(getDay(day));
+        const isDisabled = isPast || isDisabledDay;
+
+        days.push(
+          <div
+            key={day.toString()}
+            className={`relative h-20 sm:h-24 border-t border-l border-gray-50 flex flex-col items-center justify-center cursor-pointer transition-all group ${
+              !isCurrentMonth ? "bg-gray-50/30" : "bg-white"
+            } ${isSelected ? "bg-yellow-500 text-white z-10 shadow-xl shadow-yellow-500/20" : "hover:bg-gray-50"} ${
+              isDisabled ? "opacity-20 cursor-not-allowed grayscale" : ""
+            }`}
+            onClick={() => !isDisabled && onDateClick(cloneDay)}
+          >
+            <span className={`text-lg font-bold ${isSelected ? "text-white" : isToday(day) ? "text-yellow-600" : "text-gray-700"}`}>
+              {formattedDate}
+            </span>
+            {isToday(day) && !isSelected && (
+              <div className="absolute bottom-3 w-1 h-1 bg-yellow-500 rounded-full"></div>
+            )}
+            {isDisabledDay && (
+              <div className="absolute top-2 right-2 text-[8px] font-bold text-red-400 uppercase tracking-tighter">
+                {selectedLang === 'KO' ? '불가' : 'N/A'}
+              </div>
+            )}
+          </div>
+        );
+        day = addDays(day, 1);
+      }
+      rows.push(
+        <div className="grid grid-cols-7 border-r border-b border-gray-50" key={day.toString()}>
+          {days}
+        </div>
+      );
+      days = [];
+    }
+    return <div className="rounded-2xl overflow-hidden border-t border-l border-gray-50 shadow-sm">{rows}</div>;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-3xl shadow-2xl p-6 sm:p-10 max-w-4xl w-full relative z-10 border border-black/5 max-h-[90vh] overflow-y-auto"
+      >
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X size={24} />
+        </button>
+        
+        {renderHeader()}
+        {renderDays()}
+        {renderCells()}
+
+        <div className="mt-8 flex items-center justify-between text-xs text-gray-400 font-medium">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1.5">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+              <span>{selectedLang === 'KO' ? '오늘' : 'Today'}</span>
+            </div>
+            <div className="flex items-center space-x-1.5">
+              <div className="w-2 h-2 bg-gray-200 rounded-full"></div>
+              <span>{selectedLang === 'KO' ? '선택 불가' : 'Unavailable'}</span>
+            </div>
+          </div>
+          <p>{selectedLang === 'KO' ? '* 날짜를 클릭하여 선택하세요.' : '* Click a date to select.'}</p>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 export default function App() {
   const [currentView, setCurrentView] = useState('home'); // 'home', 'detail', 'mypage', 'category'
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -1282,6 +1438,14 @@ export default function App() {
   const [timer, setTimer] = useState(600); // 10 minutes in seconds
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<any>({
+    siteName: 'Goldistrip',
+    primaryColor: '#FFB602',
+    metaTitle: 'Goldistrip - 현지 여행 플랫폼',
+    metaDescription: 'Goldistrip과 함께 특별한 현지 체험과 숙소를 발견하세요.',
+    disabledWeekdays: []
+  });
   const [countrySearch, setCountrySearch] = useState('');
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
 
@@ -1343,7 +1507,20 @@ export default function App() {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'products');
     });
-    return () => unsubscribe();
+
+    // Fetch System Settings
+    const unsubscribeSettings = onSnapshot(doc(db, 'config', 'settings'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSystemSettings(snapshot.data());
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'config/settings');
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeSettings();
+    };
   }, []);
 
   useEffect(() => {
@@ -1526,10 +1703,13 @@ export default function App() {
     } catch (error: any) {
       console.error("SignUp Error:", error);
       setToastMessage(error.message || "Error sending verification code.");
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
+    setAuthLoading(true);
     const trimmedEmail = email.trim().toLowerCase();
     try {
       const path = `verification_codes/${trimmedEmail}`;
@@ -1559,6 +1739,8 @@ export default function App() {
     } catch (error: any) {
       console.error("Verify Error:", error);
       setToastMessage(t('verifyError'));
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -1600,6 +1782,7 @@ export default function App() {
   }, [birthDate, authMode]);
 
   const handleFinalSignUp = async () => {
+    setAuthLoading(true);
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password || !confirmPassword || !nickname || !country || !gender || !preferredLanguage || !birthDate || !firstName || !lastName) {
       setToastMessage(t('fillRequired'));
@@ -1688,6 +1871,8 @@ export default function App() {
     } catch (error: any) {
       console.error("Final SignUp Error:", error);
       setToastMessage(error.message || t('signUpError'));
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -1965,6 +2150,20 @@ export default function App() {
           onClose={() => setIsAdminDashboardOpen(false)} 
         />
       )}
+
+      {/* Large Calendar Modal */}
+      <AnimatePresence>
+        {isCalendarOpen && (
+          <LargeCalendar
+            isOpen={isCalendarOpen}
+            onClose={() => setIsCalendarOpen(false)}
+            selectedDate={selectedDate}
+            onSelect={setSelectedDate}
+            disabledWeekdays={systemSettings.disabledWeekdays}
+            selectedLang={selectedLang}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 알림(Toast) 메시지 */}
       {toastMessage && (
@@ -2896,16 +3095,13 @@ export default function App() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('date')}</label>
-                      <div className="relative">
-                        <input 
-                          type="date" 
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                          className="w-full border border-gray-200 rounded-2xl p-4 focus:outline-none focus:border-[#FFB602] transition-all bg-white text-gray-700 font-medium appearance-none"
-                          min={new Date().toISOString().split('T')[0]}
-                        />
-                        <Calendar size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
+                      <button 
+                        onClick={() => setIsCalendarOpen(true)}
+                        className="w-full border border-gray-200 rounded-2xl p-4 focus:outline-none focus:border-[#FFB602] transition-all bg-white text-gray-700 font-medium flex items-center justify-between hover:border-gray-300"
+                      >
+                        <span>{selectedDate || (selectedLang === 'KO' ? '날짜를 선택하세요' : 'Select Date')}</span>
+                        <Calendar size={18} className="text-gray-400" />
+                      </button>
                     </div>
 
                     <div className="space-y-3">
@@ -3272,9 +3468,10 @@ export default function App() {
 
       {/* 로그인 모달 */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300 my-8">
-            <div className="p-6 flex justify-between items-center border-b border-gray-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] overflow-y-auto">
+          <div className="flex min-h-full justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300 relative my-auto">
+              <div className="p-6 flex justify-between items-center border-b border-gray-50">
               <h3 className="text-xl font-bold text-gray-900">
                 {authMode === 'login' && t('loginTitle')}
                 {authMode === 'signup' && t('signupTitle')}
@@ -3523,8 +3720,10 @@ export default function App() {
                   <>
                     <button 
                       onClick={handleEmailLogin}
-                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                      disabled={authLoading}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                     >
+                      {authLoading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
                       {t('login')}
                     </button>
                     <button 
@@ -3548,8 +3747,10 @@ export default function App() {
                   <>
                     <button 
                       onClick={handleEmailSignUp}
-                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                      disabled={authLoading}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                     >
+                      {authLoading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
                       {t('verifyEmailBtn')}
                     </button>
                     <button 
@@ -3565,8 +3766,10 @@ export default function App() {
                   <>
                     <button 
                       onClick={handleVerifyCode}
-                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                      disabled={authLoading}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                     >
+                      {authLoading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
                       {t('nextBtn')}
                     </button>
                     <button 
@@ -3582,8 +3785,10 @@ export default function App() {
                   <>
                     <button 
                       onClick={handleFinalSignUp}
-                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                      disabled={authLoading}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                     >
+                      {authLoading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
                       {t('signUpBtn')}
                     </button>
                     <button 
@@ -3599,8 +3804,10 @@ export default function App() {
                   <>
                     <button 
                       onClick={handleFindPassword}
-                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg"
+                      disabled={authLoading}
+                      className="w-full py-4 bg-[#FFB602] text-white border-2 border-white rounded-xl hover:bg-[#e5a402] transition-all font-bold shadow-sm text-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                     >
+                      {authLoading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
                       {t('sendResetEmail')}
                     </button>
                     <button 
@@ -3658,7 +3865,8 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
     </div>
   );
 }

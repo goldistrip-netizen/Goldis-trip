@@ -106,6 +106,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
   
+  // System Settings State
+  const [systemSettings, setSystemSettings] = useState<any>({
+    siteName: 'Goldistrip',
+    primaryColor: '#FFB602',
+    metaTitle: 'Goldistrip - 현지 여행 플랫폼',
+    metaDescription: 'Goldistrip과 함께 특별한 현지 체험과 숙소를 발견하세요.',
+    disabledWeekdays: [] // 0: Sun, 1: Mon, ..., 6: Sat
+  });
+  
   // Product Registration State
   const [showAddProductForm, setShowAddProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -275,12 +284,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
       setLoading(false);
     });
 
+    // Fetch System Settings
+    const unsubscribeSettings = onSnapshot(doc(db, 'config', 'settings'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSystemSettings(snapshot.data());
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'config/settings');
+    });
+
     return () => {
       unsubscribeBookings();
       unsubscribeUsers();
       unsubscribeProducts();
+      unsubscribeSettings();
     };
   }, []);
+
+  const handleSaveSettings = async () => {
+    try {
+      await setDoc(doc(db, 'config', 'settings'), systemSettings);
+      setNotification({ message: '시스템 설정이 저장되었습니다.', type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      setNotification({ message: '설정 저장 중 오류가 발생했습니다.', type: 'error' });
+      setTimeout(() => setNotification(null), 3000);
+    }
+  };
 
   const handleSaveProduct = async () => {
     try {
@@ -1130,15 +1161,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase">사이트 이름</label>
-              <input type="text" defaultValue="Goldistrip" className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" />
+              <input 
+                type="text" 
+                value={systemSettings.siteName} 
+                onChange={(e) => setSystemSettings({ ...systemSettings, siteName: e.target.value })}
+                className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" 
+              />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase">기본 색상</label>
               <div className="flex space-x-2">
-                <input type="text" defaultValue="#FFB602" className="flex-1 px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" />
-                <div className="w-10 h-10 rounded-xl bg-[#FFB602] border border-black/10"></div>
+                <input 
+                  type="text" 
+                  value={systemSettings.primaryColor} 
+                  onChange={(e) => setSystemSettings({ ...systemSettings, primaryColor: e.target.value })}
+                  className="flex-1 px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" 
+                />
+                <div className="w-10 h-10 rounded-xl border border-black/10" style={{ backgroundColor: systemSettings.primaryColor }}></div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="text-lg font-bold flex items-center">
+            <Calendar size={20} className="mr-2 text-red-500" />
+            예약 불가 요일 설정
+          </h3>
+          <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-start space-x-3">
+            <AlertCircle className="text-red-600 mt-0.5" size={18} />
+            <p className="text-sm text-red-800">
+              선택한 요일은 상품 상세 페이지의 달력에서 선택할 수 없게 됩니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => {
+              const isSelected = systemSettings.disabledWeekdays?.includes(idx);
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const newDisabled = isSelected
+                      ? systemSettings.disabledWeekdays.filter((d: number) => d !== idx)
+                      : [...(systemSettings.disabledWeekdays || []), idx];
+                    setSystemSettings({ ...systemSettings, disabledWeekdays: newDisabled });
+                  }}
+                  className={`px-6 py-3 rounded-xl font-bold transition-all border-2 ${
+                    isSelected 
+                      ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20' 
+                      : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -1150,11 +1227,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase">메타 제목</label>
-              <input type="text" defaultValue="Goldistrip - 현지 여행 플랫폼" className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" />
+              <input 
+                type="text" 
+                value={systemSettings.metaTitle} 
+                onChange={(e) => setSystemSettings({ ...systemSettings, metaTitle: e.target.value })}
+                className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20" 
+              />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase">메타 설명</label>
-              <textarea rows={3} className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20 resize-none">Goldistrip과 함께 특별한 현지 체험과 숙소를 발견하세요.</textarea>
+              <textarea 
+                rows={3} 
+                value={systemSettings.metaDescription}
+                onChange={(e) => setSystemSettings({ ...systemSettings, metaDescription: e.target.value })}
+                className="w-full px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-yellow-500/20 resize-none"
+              ></textarea>
             </div>
           </div>
         </section>
@@ -1183,7 +1270,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, selecte
         </section>
 
         <div className="pt-4 flex justify-end">
-          <button className="bg-black text-white px-8 py-3 rounded-xl font-bold flex items-center hover:bg-gray-800 transition-all shadow-lg shadow-black/10">
+          <button 
+            onClick={handleSaveSettings}
+            className="bg-black text-white px-8 py-3 rounded-xl font-bold flex items-center hover:bg-gray-800 transition-all shadow-lg shadow-black/10"
+          >
             <Save size={18} className="mr-2" />
             모든 설정 저장
           </button>
